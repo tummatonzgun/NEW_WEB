@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เลือกวิธีประมวลผล</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #fff;
+            background-image: url('/static/logo.png');
+            background-size: 10%; /* ปรับขนาดรูปให้พอดีกับหน้าจอ */
+            background-position: right 40px top 40px; /* เว้นขอบขวาและบน 40px */
+            background-repeat: no-repeat; /* ไม่ให้รูปซ้ำ */
+            background-attachment: fixed; /* ทำให้รูปไม่เลื่อนตามการ scroll */
+        }
+        h2 {
+            color: #333;
+            margin: 50px;
+            text-align: center;
+            font-size: 55px;
+            text-shadow: black 1px 1px 1px
+        }
+        h3 {
+            color: #333;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 40px;
+            text-shadow: black 1px 1px 1px
+        }
+        .method-form {
+            max-width: 800px;
+            margin: 40px auto 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 5px 5px 12px rgba(0,0,0,0.5);
+            padding: 50px 40px 30px 40px;
+        }
+        .method-radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            margin-bottom: 2rem;
+        }
+        .method-radio {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        .method-radio input[type="radio"] {
+            margin-top: 4px;
+            accent-color: #1976d2;
+            width: 1.2em;
+            height: 1.2em;
+        }
+        .method-radio label {
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        .method-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1976d2;
+        }
+        .method-desc {
+            font-size: 0.97rem;
+            color: #555;
+            opacity: 0.85;
+        }
+        .btn-method-next {
+            width: 100%;
+            padding: 0.9rem 0;
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: background 0.2s;
+        }
+        .btn-method-next:hover {
+            background: #1251a2;
+        }
+        .input-section {
+            margin-bottom: 1.2rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+            box-shadow: 0 1px 4px rgba(25,118,210,0.04);
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 0.3rem;
+            font-weight: 600;
+            color: #495057;
+        }
+        .form-control {
+            display: block;
+            width: 100%;
+            padding: 0.6rem;
+            font-size: 1rem;
+            color: #495057;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 0.375rem;
+            margin-bottom: 0.7rem;
+        }
+        .form-label-optional {
+            font-weight: normal;
+            color: #888;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <h2>Operation: {{ operation }}</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul style="color: red; margin-bottom: 18px;">
+          {% for category, message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    <h3>Method</h3>
+    <form method="post" action="{{ url_for('method') }}" enctype="multipart/form-data" class="method-form">
+        <div class="method-radio-group">
+            <div class="method-radio">
+                <input type="radio" id="upload" name="inputMethod" value="upload" checked>
+                <label for="upload">
+                    <span class="method-title">อัปโหลดไฟล์</span>
+                    <span class="method-desc">เลือกไฟล์จากคอมพิวเตอร์</span>
+                </label>
+            </div>
+            <div class="method-radio">
+                <input type="radio" id="folder" name="inputMethod" value="folder">
+                <label for="folder">
+                    <span class="method-title">เลือกจากโฟลเดอร์</span>
+                    <span class="method-desc">เลือกไฟล์จากโฟลเดอร์ที่มีในระบบ</span>
+                </label>
+            </div>
+            <div class="method-radio">
+                <input type="radio" id="api" name="inputMethod" value="api">
+                <label for="api">
+                    <span class="method-title">API (ไฟล์ที่มีอยู่ในระบบ)</span>
+                    <span class="method-desc">ดึงไฟล์จาก API ภายนอก</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Section: อัปโหลดไฟล์ -->
+        <div id="uploadSection" class="input-section">
+            <label for="fileInput" class="form-label">เลือกไฟล์</label>
+            <input type="file" id="fileInput" name="file" class="form-control" multiple>
+        </div>
+
+        <!-- Section: เลือกโฟลเดอร์ -->
+        <div id="folderSection" class="input-section" style="display:none;">
+            <label for="folderDropdown" class="form-label">เลือกโฟลเดอร์</label>
+            <select id="folderDropdown" name="selected_folder" class="form-control">
+                <option value="">-- กรุณาเลือกโฟลเดอร์ --</option>
+                <option value="folder1">โฟลเดอร์ 1</option>
+                <option value="folder2">โฟลเดอร์ 2</option>
+                <option value="folder3">โฟลเดอร์ 3</option>
+            </select>
+        </div>
+
+        <!-- Section: API -->
+        <div id="apiInputSection" class="input-section" style="display:none;">
+            <label for="endpoint" class="form-label">API Endpoint</label>
+            <select id="endpoint" name="endpoint" class="form-control" required>
+                <option value="data">AutoUPH_Get (data)</option>
+                <!-- เพิ่ม endpoint อื่นๆ ตามต้องการ -->
+            </select>
+
+            <label for="plant" class="form-label">Plant</label>
+            <input type="text" id="plant" name="plant" class="form-control" required>
+
+            <label for="year_quarter" class="form-label">Year Quarter</label>
+            <input type="text" id="year_quarter" name="year_quarter" class="form-control" required>
+
+            <label for="api_operation" class="form-label">Operation</label>
+            <input type="text" id="api_operation" name="api_operation" class="form-control" required>
+
+            <label for="bom_no" class="form-label">BOM No <span class="form-label-optional">(ไม่กรอกก็ได้)</span></label>
+            <input type="text" id="bom_no" name="bom_no" class="form-control">
+
+            <button type="button" id="testApiBtn" class="btn-method-next" style="background:#28a745; margin-bottom:10px;">
+                ทดสอบดึง API
+            </button>
+            <pre id="apiResult" style="background:#222; color:#fff; padding:1em; border-radius:8px; min-height:80px;"></pre>
+        </div>
+
+        <input type="hidden" name="operation" value="{{ operation }}">
+        <button type="submit" class="btn-method-next">ถัดไป</button>
+        <a href="{{ url_for('operation') }}" class="btn-method-next" style="background:#888; margin-top:10px; display:block; text-align:center; text-decoration:none;">
+            ย้อนกลับ
+        </a>
+    </form>
+
+    <script>
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadRadio = document.getElementById('upload');
+        const folderRadio = document.getElementById('folder');
+        const apiRadio = document.getElementById('api');
+        const uploadSection = document.getElementById('uploadSection');
+        const folderSection = document.getElementById('folderSection');
+        const apiSection = document.getElementById('apiInputSection');
+
+        function toggleSections() {
+            uploadSection.style.display = uploadRadio.checked ? '' : 'none';
+            folderSection.style.display = folderRadio.checked ? '' : 'none';
+            apiSection.style.display = apiRadio.checked ? '' : 'none';
+
+            // toggle required เฉพาะตอนเลือก API
+            document.getElementById('plant').required = apiRadio.checked;
+            document.getElementById('year_quarter').required = apiRadio.checked;
+            document.getElementById('api_operation').required = apiRadio.checked;
+        }
+
+        [uploadRadio, folderRadio, apiRadio].forEach(radio => {
+            radio.addEventListener('change', toggleSections);
+        });
+
+        // Initial call to set the correct section visible
+        toggleSections();
+    });
+
+    document.getElementById('testApiBtn').onclick = async function() {
+        // เก็บค่าจาก input
+        const endpoint = document.getElementById('endpoint').value;
+        const plant = document.getElementById('plant').value;
+        const year_quarter = document.getElementById('year_quarter').value;
+        const api_operation = document.getElementById('api_operation').value;
+        const bom_no = document.getElementById('bom_no').value;
+
+        // สร้าง query string
+        const params = new URLSearchParams({
+            endpoint,
+            plant,
+            year_quarter,
+            operation: api_operation,
+            bom_no
+        }).toString();
+
+        const resultBox = document.getElementById('apiResult');
+        resultBox.textContent = "Loading...";
+        try {
+            const res = await fetch('/api/?' + params);
+            let data;
+            try {
+                data = await res.json();
+            } catch {
+                resultBox.textContent = "API ไม่ได้ส่งข้อมูล JSON";
+                return;
+            }
+            resultBox.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+            resultBox.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ API: " + err;
+        }
+    };
+
+document.querySelector('form.method-form').onsubmit = function (e) {
+    const fileInput = document.getElementById('fileInput');
+
+    if (document.getElementById('upload').checked) {
+        if (!fileInput.value) {
+            alert('กรุณาเลือกไฟล์ก่อน');
+            e.preventDefault();
+            return false;
+        }
+    }
+
+    if (document.getElementById('folder').checked) {
+        if (!fileInput.value) {
+            alert('กรุณาเลือกโฟลเดอร์ก่อน');
+            e.preventDefault();
+            return false;
+        }
+    }
+};
+    </script>
+</body>
+</html>

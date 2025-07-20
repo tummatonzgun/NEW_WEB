@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>เลือกฟังก์ชัน</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #fff;
+            background-image: url('/static/logo.png');
+            background-size: 10%; /* ปรับขนาดรูปให้พอดีกับหน้าจอ */
+            background-position: right 40px top 40px; /* เว้นขอบขวาและบน 40px */
+            background-repeat: no-repeat; /* ไม่ให้รูปซ้ำ */
+            background-attachment: fixed; /* ทำให้รูปไม่เลื่อนตามการ scroll */
+        }
+        .function-container {
+            max-width: 600px;
+            margin: 60px auto 0 auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(25, 118, 210, 0.12);
+            padding: 40px 32px 32px 32px;
+        }
+        h1 {
+            color: #333;
+            margin: 50px;
+            text-align: center;
+            font-size: 55px;
+            text-shadow: black 1px 1px 1px;
+        }
+        h2 {
+            color: #1976d2;
+            text-align: center;
+            margin-bottom: 32px;
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        .current-file {
+            margin-bottom: 24px;
+            color: #1976d2;
+            font-size: 1.1em;
+            text-align: center;
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 10px 0;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        label {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        select {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #bdbdbd;
+            font-size: 1rem;
+            background: #f5faff;
+            transition: border 0.2s;
+        }
+        select:focus {
+            border-color: #1976d2;
+            outline: none;
+        }
+        button[type="submit"] {
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            padding: 12px 0;
+            cursor: pointer;
+            font-weight: 500;
+            margin-top: 10px;
+            box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
+            transition: background 0.2s, transform 0.2s;
+        }
+        button[type="submit"]:hover {
+            background: #1251a2;
+            transform: translateY(-2px) scale(1.03);
+        }
+    </style>
+</head>
+<body>
+    <h1>Operation: {{ operation }}</h1>
+    <div class="function-container">
+        <h2>เลือกฟังก์ชันที่ต้องการประมวลผล</h2>
+        {% if current_file %}
+        <div class="current-file">
+            <b>กำลังอ่าน:</b> {{ current_file }}
+        </div>
+        {% endif %}
+        <form method="post" action="{{ url_for('function') }}">
+            <label for="funcSelect">ฟังก์ชัน:</label>
+            <select name="func_name" id="funcSelect" required>
+                {% for func in functions %}
+                    {% if func %}
+                        <option value="{{ func }}">{{ func }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            <button type="submit">ประมวลผล</button>
+        </form>
+    </div>
+</body>
+</html>
