@@ -99,15 +99,43 @@
         {% endif %}
         <form method="post" action="{{ url_for('function') }}">
             <label for="funcSelect">ฟังก์ชัน:</label>
-            <select name="func_name" id="funcSelect" required>
+            <select name="func_name" id="funcSelect" required onchange="toggleDateRange()">
                 {% for func in functions %}
                     {% if func %}
                         <option value="{{ func }}">{{ func }}</option>
                     {% endif %}
                 {% endfor %}
             </select>
+            <div id="dateRangeFields" style="display:none;">
+                <label for="startDate">วันที่เริ่มต้น:</label>
+                <input type="date" name="start_date" id="startDate">
+                <label for="endDate">วันที่สิ้นสุด:</label>
+                <input type="date" name="end_date" id="endDate">
+            </div>
             <button type="submit">ประมวลผล</button>
         </form>
+        {% if date_info %}
+            <div class="date-preview" style="margin-top:18px; background:#f5faff; border-radius:8px; padding:12px;">
+                <b>ช่วงวันที่ในไฟล์:</b> {{ date_info.min_date }} ถึง {{ date_info.max_date }}<br>
+                <b>จำนวนวัน:</b> {{ date_info.total_days }}<br>
+                <b>ข้อมูลวันที่ถูกต้อง:</b> {{ date_info.valid_records }} แถว<br>
+                <b>ข้อมูลวันที่ผิด:</b> {{ date_info.invalid_records }} แถว<br>
+                <b>คอลัมน์วันที่:</b> {{ date_info.date_column }}
+            </div>
+        {% endif %}
     </div>
+    <script>
+    function toggleDateRange() {
+        const select = document.getElementById('funcSelect');
+        const dateFields = document.getElementById('dateRangeFields');
+        const funcsWithDate = ['DA_AUTO_UPH', 'PNP_AUTO_UPH', 'WB_AUTO_UPH'];
+        if (funcsWithDate.includes(select.value)) {
+            dateFields.style.display = '';
+        } else {
+            dateFields.style.display = 'none';
+        }
+    }
+    window.onload = toggleDateRange;
+    </script>
 </body>
 </html>

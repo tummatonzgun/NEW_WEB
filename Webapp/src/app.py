@@ -6,8 +6,8 @@ import socket
 import json     
 import pandas as pd
 import requests
-
 import sys
+
 # เพิ่ม path สำหรับ src และ src/functions เพื่อให้ importlib หา module เจอ
 SRC_PATH = os.path.join(os.getcwd(), "src")
 FUNCTIONS_PATH = os.path.join(SRC_PATH, "functions")
@@ -151,6 +151,11 @@ def method():
 def function():
     if request.method == "POST":
         func_name = request.form.get("func_name")
+        start_date = request.form.get("start_date")
+        end_date = request.form.get("end_date")
+        if not start_date or not end_date:
+            start_date = None
+            end_date = None
         input_method = session.get("input_method")
         operation = session.get("operation")
         result = None
@@ -175,7 +180,10 @@ def function():
             if isinstance(file_path, list):
                 result = [func(f, temp_root) for f in file_path]
             else:
-                result = func(file_path, temp_root)
+                if func_name in ["DA_AUTO_UPH", "PNP_AUTO_UPH", "WB_AUTO_UPH"]:
+                    result = func(file_path, temp_root, start_date, end_date)
+                else:
+                    result = func(file_path, temp_root)
         except Exception as e:
             result = f"เกิดข้อผิดพลาดในการเรียกใช้ฟังก์ชัน {func_name}: {e}"
 
@@ -202,30 +210,48 @@ def function():
         session["func_name"] = func_name
         return redirect(url_for("result"))
 
-    # GET: render หน้าเลือกฟังก์ชัน (เหมือนเดิม)
+    # GET: render หน้าเลือกฟังก์ชัน (เพิ่ม preview date range)
     input_method = session.get("input_method")
     current_file = None
+    file_path = None
     if input_method == "upload":
         file_path = session.get("uploaded_file_path")
         if file_path:
             if isinstance(file_path, list):
                 current_file = [os.path.basename(f) for f in file_path]
+                file_path_preview = file_path[0]
             else:
                 current_file = os.path.basename(file_path)
+                file_path_preview = file_path
     elif input_method == "folder":
         folder = session.get("selected_folder")
         if folder:
             if isinstance(folder, list):
                 current_file = [os.path.basename(f) for f in folder]
+                file_path_preview = folder[0]
             else:
                 current_file = folder
+                file_path_preview = folder
     elif input_method == "api":
         json_path = session.get("api_json_path")
         if json_path:
             current_file = os.path.basename(json_path)
+            file_path_preview = json_path
+    else:
+        file_path_preview = None
+
+    # Preview date range
+    date_info = None
+    if file_path_preview and os.path.exists(file_path_preview):
+        try:
+            from functions.da_auto_uph import preview_date_range
+            date_info = preview_date_range(file_path_preview)
+        except Exception as e:
+            date_info = None
+
     operation = session.get("operation")
     functions = OPERATION_FUNCTIONS.get(operation, [])
-    return render_template("function.html", functions=functions, current_file=current_file, operation=operation)
+    return render_template("function.html", functions=functions, current_file=current_file, operation=operation, date_info=date_info)
 
 @app.route("/result", methods=["GET"])
 def result():
@@ -322,3 +348,4 @@ if __name__ == "__main__":
 
 # ===== Version Information =====
 # version 3.0 - Fully Refactored with Service Classes and Modern Architecture
+

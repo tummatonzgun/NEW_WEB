@@ -2,8 +2,181 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+import json
+import requests
 from datetime import datetime
+from urllib.parse import urlparse
 
+def load_data_from_source(source):
+    """
+    โหลดข้อมูลจากแหล่งต่างๆ (Excel, JSON file, JSON API)
+    
+    Parameters:
+    source (str): ที่อยู่ของข้อมูล (file path หรือ URL)
+    
+    Returns:
+    pandas.DataFrame: ข้อมูลที่โหลดแล้ว
+    """
+    try:
+        # ตรวจสอบว่าเป็น URL หรือไม่
+        parsed = urlparse(source)
+        is_url = bool(parsed.netloc)
+        
+        if is_url:
+            print(f"📡 กำลังเรียกข้อมูลจาก API: {source}")
+            response = requests.get(source, timeout=30)
+            response.raise_for_status()
+            
+            # ตรวจสอบ Content-Type
+            content_type = response.headers.get('content-type', '').lower()
+            
+            if 'application/json' in content_type or source.endswith('.json'):
+                # ข้อมูล JSON จาก API
+                json_data = response.json()
+                df = process_json_data(json_data)
+                print(f"✅ โหลดข้อมูลจาก API สำเร็จ: {len(df)} แถว")
+                
+            else:
+                raise ValueError(f"ประเภทข้อมูลไม่รองรับ: {content_type}")
+                
+        else:
+            # ไฟล์ในเครื่อง
+            if not os.path.exists(source):
+                raise FileNotFoundError(f"ไม่พบไฟล์: {source}")
+                
+            file_ext = os.path.splitext(source)[1].lower()
+            
+            if file_ext in ['.xlsx', '.xls']:
+                print(f"📄 กำลังโหลดไฟล์ Excel: {source}")
+                df = pd.read_excel(source)
+                print(f"✅ โหลดไฟล์ Excel สำเร็จ: {len(df)} แถว")
+                
+            elif file_ext == '.json':
+                print(f"📄 กำลังโหลดไฟล์ JSON: {source}")
+                with open(source, 'r', encoding='utf-8') as f:
+                    json_data = json.load(f)
+                df = process_json_data(json_data)
+                print(f"✅ โหลดไฟล์ JSON สำเร็จ: {len(df)} แถว")
+                
+            elif file_ext == '.csv':
+                print(f"📄 กำลังโหลดไฟล์ CSV: {source}")
+                df = pd.read_csv(source)
+                print(f"✅ โหลดไฟล์ CSV สำเร็จ: {len(df)} แถว")
+                
+            else:
+                raise ValueError(f"ประเภทไฟล์ไม่รองรับ: {file_ext}")
+        
+        return df
+        
+    except requests.RequestException as e:
+        raise Exception(f"❌ เกิดข้อผิดพลาดในการเรียก API: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise Exception(f"❌ ข้อมูล JSON ไม่ถูกต้อง: {str(e)}")
+    except Exception as e:
+        raise Exception(f"❌ เกิดข้อผิดพลาดในการโหลดข้อมูล: {str(e)}")
+
+def process_json_data(json_data):
+    """
+    ประมวลผลข้อมูล JSON เป็น DataFrame
+    
+    Parameters:
+    json_data: ข้อมูล JSON ที่ได้จาก API หรือไฟล์
+    
+    Returns:
+    pandas.DataFrame: ข้อมูลที่ประมวลผลแล้ว
+    """
+    print("🔄 กำลังประมวลผลข้อมูล JSON...")
+    
+    # กรณีที่ 1: ข้อมูลเป็น list ของ objects
+    if isinstance(json_data, list):
+        df = pd.DataFrame(json_data)
+        
+    # กรณีที่ 2: ข้อมูลอยู่ใน key ใดๆ
+    elif isinstance(json_data, dict):
+        # ลองหา key ที่มี list ของข้อมูล
+        possible_keys = ['data', 'results', 'items', 'records', 'rows', 'content']
+        
+        data_found = False
+        for key in possible_keys:
+            if key in json_data and isinstance(json_data[key], list):
+                df = pd.DataFrame(json_data[key])
+                print(f"📋 ใช้ข้อมูลจาก key: '{key}'")
+                data_found = True
+                break
+        
+        if not data_found:
+            # ถ้าไม่เจอ ลองใช้ key แรกที่เป็น list
+            for key, value in json_data.items():
+                if isinstance(value, list):
+                    df = pd.DataFrame(value)
+                    print(f"📋 ใช้ข้อมูลจาก key: '{key}'")
+                    data_found = True
+                    break
+            
+            if not data_found:
+                # ถ้ายังไม่เจอ ลองแปลง dict ตรงๆ
+                df = pd.DataFrame([json_data])
+                print("📋 ใช้ข้อมูล JSON ทั้งหมดเป็น 1 แถว")
+    
+    else:
+        raise ValueError("รูปแบบข้อมูล JSON ไม่รองรับ")
+    
+    print(f"✅ ประมวลผล JSON เสร็จสิ้น: {len(df)} แถว, {len(df.columns)} คอลัมน์")
+    
+    # แสดงชื่อคอลัมน์
+    print("📊 คอลัมน์ที่พบ:")
+    for i, col in enumerate(df.columns):
+        print(f"  {i+1}. {col}")
+    
+    return df
+
+def load_data_with_config(source, config=None):
+    """
+    โหลดข้อมูลพร้อม configuration สำหรับ API
+    
+    Parameters:
+    source (str): ที่อยู่ของข้อมูล
+    config (dict): การตั้งค่าเพิ่มเติม เช่น headers, params, auth
+    
+    Returns:
+    pandas.DataFrame: ข้อมูลที่โหลดแล้ว
+    """
+    try:
+        parsed = urlparse(source)
+        is_url = bool(parsed.netloc)
+        
+        if is_url and config:
+            print(f"📡 กำลังเรียกข้อมูลจาก API พร้อม config: {source}")
+            
+            # ตั้งค่า request parameters
+            request_params = {
+                'timeout': config.get('timeout', 30)
+            }
+            
+            if 'headers' in config:
+                request_params['headers'] = config['headers']
+                
+            if 'params' in config:
+                request_params['params'] = config['params']
+                
+            if 'auth' in config:
+                request_params['auth'] = tuple(config['auth'])
+            
+            response = requests.get(source, **request_params)
+            response.raise_for_status()
+            
+            json_data = response.json()
+            df = process_json_data(json_data)
+            print(f"✅ โหลดข้อมูลจาก API พร้อม config สำเร็จ: {len(df)} แถว")
+            
+            return df
+        else:
+            return load_data_from_source(source)
+            
+    except Exception as e:
+        raise Exception(f"❌ เกิดข้อผิดพลาดในการโหลดข้อมูลพร้อม config: {str(e)}")
+
+# ฟังก์ชันเดิมทั้งหมด (เหมือนเดิมแต่แก้ไข Wire Per Hour)
 def apply_zscore(df):
     """ตัด outliers ด้วยวิธี Z-Score (±3 standard deviations)"""
     col_map = {col.lower(): col for col in df.columns}
@@ -18,8 +191,7 @@ def apply_zscore(df):
     z_scores = (df[uph_col] - mean) / std
     filtered = df[(z_scores >= -3) & (z_scores <= 3)].copy()
     filtered['Outlier_Method'] = 'Z-Score ±3'
- 
-    filtered['Wire Per Hour'] = 1        
+    filtered['Wire Per Hour'] = 1  # แก้ไข: กำหนดค่าให้ถูกต้อง
 
     return filtered
 
@@ -51,6 +223,7 @@ def apply_iqr(df):
     upper = Q3 + 1.5 * IQR
     filtered = df[(df[uph_col] >= lower) & (df[uph_col] <= upper)].copy()
     filtered['Outlier_Method'] = 'IQR'
+    filtered['Wire Per Hour'] = 1  # แก้ไข: เพิ่มการกำหนดค่า
     return filtered
 
 def remove_outliers_auto(df_model, max_iter=20):
@@ -65,6 +238,7 @@ def remove_outliers_auto(df_model, max_iter=20):
 
     if len(df_model) < 15:  
         df_model['Outlier_Method'] = 'ไม่ตัด (ข้อมูลน้อย)'
+        df_model['Wire Per Hour'] = 1  # แก้ไข: เพิ่มการกำหนดค่า
         return df_model
 
     current_df = df_model.copy()
@@ -74,16 +248,19 @@ def remove_outliers_auto(df_model, max_iter=20):
         z_df = apply_zscore(current_df)
         if not has_outlier(z_df):
             z_df['Outlier_Method'] = f'Z-Score Loop ×{i+1}'
+            z_df['Wire Per Hour'] = 1  # แก้ไข: เพิ่มการกำหนดค่า
             return z_df
 
         iqr_df = apply_iqr(z_df)
         if not has_outlier(iqr_df):
             iqr_df['Outlier_Method'] = f'IQR Loop ×{i+1}'
+            iqr_df['Wire Per Hour'] = 1  # แก้ไข: เพิ่มการกำหนดค่า
             return iqr_df
 
         current_df = iqr_df
 
     current_df['Outlier_Method'] = f'IQR-Z-Score Loop ×{max_iter}+'
+    current_df['Wire Per Hour'] = 1  # แก้ไข: เพิ่มการกำหนดค่า
     return current_df
 
 def remove_outliers(df):
@@ -245,16 +422,86 @@ def save_results(df_cleaned, grouped_average, start_date, end_date, output_dir):
     
     return cleaned_file, average_file
 
-def process_die_attack_data(file_path):
-    """ประมวลผลข้อมูล Die Attack"""
+def preview_date_range(source):
+    """แสดงข้อมูลวันที่ในไฟล์ก่อนประมวลผล - รองรับ JSON API"""
+    try:
+        print("📅 กำลังตรวจสอบช่วงวันที่ในข้อมูล...")
+        
+        # โหลดข้อมูลจากแหล่งต่างๆ
+        df = load_data_from_source(source)
+        print(f"📄 ข้อมูลทั้งหมด: {len(df):,} แถว")
+        
+        # หาคอลัมน์วันที่
+        date_cols = []
+        for col_name in df.columns:
+            if any(keyword in col_name.lower() for keyword in ['date', 'time', 'วัน', 'เวลา']):
+                date_cols.append(col_name)
+        
+        if not date_cols:
+            print("⚠️ ไม่พบคอลัมน์วันที่ในข้อมูล")
+            return None
+        
+        date_col = date_cols[0]
+        print(f"🗓️ ใช้คอลัมน์วันที่: '{date_col}'")
+        
+        # แปลงข้อมูลวันที่
+        df['temp_date'] = pd.to_datetime(df[date_col], errors='coerce')
+        
+        # กรองข้อมูลที่แปลงวันที่ได้
+        valid_dates = df.dropna(subset=['temp_date'])
+        invalid_count = len(df) - len(valid_dates)
+        
+        if len(valid_dates) == 0:
+            print("❌ ไม่มีข้อมูลวันที่ที่ถูกต้องในข้อมูล")
+            return None
+        
+        # หาวันที่เริ่มต้นและสิ้นสุด
+        min_date = valid_dates['temp_date'].min()
+        max_date = valid_dates['temp_date'].max()
+        
+        # แสดงผลลัพธ์
+        print(f"\n📊 สรุปข้อมูลวันที่:")
+        print(f"  🗓️ วันที่เริ่มต้น: {min_date.strftime('%Y-%m-%d')} (ค.ศ.)")
+        print(f"  🗓️ วันที่สิ้นสุด: {max_date.strftime('%Y-%m-%d')} (ค.ศ.)")
+        print(f"  📈 จำนวนวัน: {(max_date - min_date).days + 1} วัน")
+        print(f"  ✅ ข้อมูลวันที่ถูกต้อง: {len(valid_dates):,} แถว")
+        
+        if invalid_count > 0:
+            print(f"  ⚠️ ข้อมูลวันที่ไม่ถูกต้อง: {invalid_count:,} แถว")
+        
+        # แสดงตัวอย่างข้อมูลตามช่วงเวลา
+        print(f"\n📋 การกระจายข้อมูลตามเดือน:")
+        monthly_counts = valid_dates.groupby(valid_dates['temp_date'].dt.to_period('M')).size()
+        for period, count in monthly_counts.head(10).items():
+            print(f"  📅 {period}: {count:,} แถว")
+        
+        if len(monthly_counts) > 10:
+            print(f"  ... และอีก {len(monthly_counts) - 10} เดือน")
+        
+        return {
+            'min_date': min_date.strftime('%Y-%m-%d'),
+            'max_date': max_date.strftime('%Y-%m-%d'),
+            'total_days': (max_date - min_date).days + 1,
+            'valid_records': len(valid_dates),
+            'invalid_records': invalid_count,
+            'date_column': date_col,
+            'monthly_distribution': {str(period): count for period, count in monthly_counts.to_dict().items()}
+        }
+        
+    except Exception as e:
+        print(f"❌ เกิดข้อผิดพลาดในการตรวจสอบวันที่: {str(e)}")
+        return None
+
+def process_die_attack_data(source):
+    """ประมวลผลข้อมูล Die Attack - รองรับ JSON API"""
     print("=== เริ่มต้นการประมวลผลข้อมูล Die Attack ===")
     
-    # อ่านไฟล์ข้อมูล
+    # อ่านข้อมูลจากแหล่งต่างๆ
     try:
-        df = pd.read_excel(file_path)
+        df = load_data_from_source(source)
         print(f"ข้อมูลเริ่มต้น: {len(df)} แถว")
     except Exception as e:
-        raise Exception(f"ไม่สามารถอ่านไฟล์ได้: {str(e)}")
+        raise Exception(f"ไม่สามารถโหลดข้อมูลได้: {str(e)}")
     
     # ขั้นตอนที่ 1: แปลงข้อมูลวันที่
     print("\n1. แปลงข้อมูลวันที่...")
@@ -332,18 +579,6 @@ def process_die_attack_data_with_date_range(file_path, start_date, end_date):
     
     return df_cleaned, grouped_average, formatted_start_date, formatted_end_date
 
-def DA_AUTO_UPH(file_path, temp_root):
-    df_cleaned, grouped_average, start_date, end_date = process_die_attack_data(file_path)
-    cleaned_file, average_file = save_results(df_cleaned, grouped_average, start_date, end_date, temp_root)
-    summary = {
-        "cleaned_file": cleaned_file,
-        "average_file": average_file,
-        "total_records": len(df_cleaned),
-        "groups_count": len(grouped_average),
-        "date_range": f"{start_date} ถึง {end_date}",
-        "status": "success"
-    }
-    return summary
 
 def preview_date_range(file_path):
     """แสดงข้อมูลวันที่ในไฟล์ก่อนประมวลผล"""
@@ -415,101 +650,16 @@ def preview_date_range(file_path):
         print(f"❌ เกิดข้อผิดพลาดในการตรวจสอบวันที่: {str(e)}")
         return None
 
-def DA_AUTO_UPH(input_dir, output_dir, start_date=None, end_date=None, use_all_dates=True):
-
-    print("🚀 เริ่มต้นการประมวลผล Die Attack Auto UPH")
-    print(f"📁 Input directory: {input_dir}")
-    print(f"📁 Output directory: {output_dir}")
-    
-    if not use_all_dates and start_date and end_date:
-        print(f"📅 ช่วงวันที่: {start_date} ถึง {end_date}")
+def DA_AUTO_UPH(file_path, temp_root, start_date=None, end_date=None):
+    # เช็คว่ามีการเลือกวันที่จริงหรือไม่
+    if start_date and end_date:
+        # ถ้ารับจาก input type="date" จะเป็น 'YYYY-MM-DD'
+        # ถ้า process_die_attack_data_with_date_range ต้องการ 'YYYY/MM/DD' ให้แปลงก่อน
+        start_date_fmt = start_date.replace("-", "/")
+        end_date_fmt = end_date.replace("-", "/")
+        df_cleaned, grouped_average, start_date, end_date = process_die_attack_data_with_date_range(file_path, start_date_fmt, end_date_fmt)
     else:
-        print("📅 ใช้ข้อมูลทั้งหมด")
-    
-    try:
-        # ตรวจสอบว่าโฟลเดอร์ input มีอยู่จริง
-        if not os.path.exists(input_dir):
-            raise Exception(f"ไม่พบโฟลเดอร์ input: {input_dir}")
-        
-        # ค้นหาไฟล์ Excel ในโฟลเดอร์ input
-        excel_files = []
-        for file in os.listdir(input_dir):
-            if file.lower().endswith(('.xlsx', '.xls')):
-                excel_files.append(os.path.join(input_dir, file))
-        
-        if not excel_files:
-            raise Exception("ไม่พบไฟล์ Excel ในโฟลเดอร์ input")
-        
-        # ใช้ไฟล์แรกที่พบ
-        input_file = excel_files[0]
-        print(f"📄 ใช้ไฟล์: {os.path.basename(input_file)}")
-        
-        # แสดงข้อมูลช่วงวันที่ในไฟล์ก่อนประมวลผล
-        print(f"\n" + "="*50)
-        print("🔍 การตรวจสอบข้อมูลวันที่ในไฟล์")
-        print("="*50)
-
-        date_info = preview_date_range(input_file)
-
-        if date_info:
-            print(f"\n💡 คำแนะนำ:")
-            print(f"  • หากต้องการประมวลผลข้อมูลทั้งหมด ให้เลือก 'ใช้ข้อมูลทั้งหมด'")
-            print(f"  • หากต้องการเลือกช่วงวันที่ ให้กำหนดวันที่ระหว่าง {date_info['min_date']} ถึง {date_info['max_date']}")
-        
-        print(f"\n" + "="*50)
-        print("🚀 เริ่มการประมวลผลข้อมูล")
-        print("="*50)
-        
-        # ประมวลผลข้อมูลตามการตั้งค่าวันที่
-        if use_all_dates:
-            df_cleaned, grouped_average, actual_start_date, actual_end_date = process_die_attack_data(input_file)
-        else:
-            df_cleaned, grouped_average, actual_start_date, actual_end_date = process_die_attack_data_with_date_range(
-                input_file, start_date, end_date
-            )
-        
-        # บันทึกผลลัพธ์
-        cleaned_file, average_file = save_results(
-            df_cleaned, grouped_average, actual_start_date, actual_end_date, output_dir
-        )
-        
-        # สร้างรายงานสรุป
-        summary = {
-            'input_file': os.path.basename(input_file),
-            'cleaned_file': os.path.basename(cleaned_file),
-            'average_file': os.path.basename(average_file),
-            'total_records': len(df_cleaned),
-            'groups_count': len(grouped_average),
-            'date_range': f"{actual_start_date} ถึง {actual_end_date}",
-            'use_all_dates': use_all_dates,
-            'processing_date_range': {
-                'start': actual_start_date,
-                'end': actual_end_date,
-                'user_defined': not use_all_dates
-            },
-            'file_date_info': date_info,  # รวมข้อมูลวันที่ของไฟล์
-            'status': 'success'
-        }
-        
-        print(f"\n✅ ประมวลผลเสร็จสิ้น!")
-        print(f"📊 ไฟล์ข้อมูลที่ตัด outliers: {os.path.basename(cleaned_file)}")
-        print(f"📈 ไฟล์ค่าเฉลี่ยตามกลุ่ม: {os.path.basename(average_file)}")
-        print(f"📋 จำนวนข้อมูลทั้งหมด: {len(df_cleaned):,} แถว")
-        print(f"📊 จำนวนกลุ่ม: {len(grouped_average)} กลุ่ม")
-        
-        return summary
-        
-    except Exception as e:
-        error_msg = f"❌ เกิดข้อผิดพลาด: {str(e)}"
-        print(error_msg)
-        
-        # สร้างรายงานข้อผิดพลาด
-        error_summary = {
-            'status': 'error',
-            'error_message': str(e),
-            'input_dir': input_dir,
-            'output_dir': output_dir
-        }
-        
-        return error_summary
+        df_cleaned, grouped_average, start_date, end_date = process_die_attack_data(file_path)
+    cleaned_file, average_file = save_results(df_cleaned, grouped_average, start_date, end_date, temp_root)
+    return average_file
 
