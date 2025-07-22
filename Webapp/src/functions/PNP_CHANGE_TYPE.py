@@ -1,10 +1,13 @@
-import pandas as pd
-import glob
 import os
+import glob
+import pandas as pd
 import re
 
 def run_all_years(input_path_or_file, output_dir):
-    if os.path.isfile(input_path_or_file):
+    # เพิ่มรองรับ list ของไฟล์
+    if isinstance(input_path_or_file, list):
+        all_files = input_path_or_file
+    elif os.path.isfile(input_path_or_file):
         all_files = [input_path_or_file]
     else:
         all_files = glob.glob(os.path.join(input_path_or_file, "WF size* (UTL1).*"))
