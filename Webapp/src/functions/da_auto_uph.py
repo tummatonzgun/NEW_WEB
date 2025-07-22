@@ -422,13 +422,13 @@ def save_results(df_cleaned, grouped_average, start_date, end_date, output_dir):
     
     return cleaned_file, average_file
 
-def preview_date_range(source):
+def preview_date_range(file_path):
     """แสดงข้อมูลวันที่ในไฟล์ก่อนประมวลผล - รองรับ JSON API"""
     try:
         print("📅 กำลังตรวจสอบช่วงวันที่ในข้อมูล...")
         
         # โหลดข้อมูลจากแหล่งต่างๆ
-        df = load_data_from_source(source)
+        df = load_data_from_source(file_path)
         print(f"📄 ข้อมูลทั้งหมด: {len(df):,} แถว")
         
         # หาคอลัมน์วันที่
@@ -539,12 +539,12 @@ def process_die_attack_data_with_date_range(file_path, start_date, end_date):
     """ประมวลผลข้อมูล Die Attack ด้วยช่วงวันที่ที่กำหนด"""
     print("=== เริ่มต้นการประมวลผลข้อมูล Die Attack (ช่วงวันที่กำหนด) ===")
     
-    # อ่านไฟล์ข้อมูล
+    # อ่านข้อมูลจากแหล่งต่างๆ (รองรับ Excel, CSV, JSON, API)
     try:
-        df = pd.read_excel(file_path)
+        df = load_data_from_source(file_path)
         print(f"ข้อมูลเริ่มต้น: {len(df)} แถว")
     except Exception as e:
-        raise Exception(f"ไม่สามารถอ่านไฟล์ได้: {str(e)}")
+        raise Exception(f"ไม่สามารถโหลดข้อมูลได้: {str(e)}")
     
     # ขั้นตอนที่ 1: แปลงข้อมูลวันที่
     print("\n1. แปลงข้อมูลวันที่...")
@@ -586,7 +586,15 @@ def preview_date_range(file_path):
         print("📅 กำลังตรวจสอบช่วงวันที่ในไฟล์...")
         
         # อ่านไฟล์ข้อมูล
-        df = pd.read_excel(file_path)
+        ext = os.path.splitext(file_path)[-1].lower()
+        if ext in [".xlsx", ".xls"]:
+            df = pd.read_excel(file_path, engine="openpyxl")
+        elif ext == ".csv":
+            df = pd.read_csv(file_path)
+        elif ext == ".json":
+            df = pd.read_json(file_path)
+        else:
+            raise ValueError("ไม่รองรับไฟล์ประเภทนี้")
         print(f"📄 ไฟล์มีข้อมูลทั้งหมด: {len(df):,} แถว")
         
         # หาคอลัมน์วันที่
@@ -651,15 +659,21 @@ def preview_date_range(file_path):
         return None
 
 def DA_AUTO_UPH(file_path, temp_root, start_date=None, end_date=None):
-    # เช็คว่ามีการเลือกวันที่จริงหรือไม่
-    if start_date and end_date:
-        # ถ้ารับจาก input type="date" จะเป็น 'YYYY-MM-DD'
-        # ถ้า process_die_attack_data_with_date_range ต้องการ 'YYYY/MM/DD' ให้แปลงก่อน
-        start_date_fmt = start_date.replace("-", "/")
-        end_date_fmt = end_date.replace("-", "/")
-        df_cleaned, grouped_average, start_date, end_date = process_die_attack_data_with_date_range(file_path, start_date_fmt, end_date_fmt)
-    else:
-        df_cleaned, grouped_average, start_date, end_date = process_die_attack_data(file_path)
-    cleaned_file, average_file = save_results(df_cleaned, grouped_average, start_date, end_date, temp_root)
-    return average_file
+    try:
+        if start_date and end_date:
+            start_date_fmt = start_date.replace("-", "/")
+            end_date_fmt = end_date.replace("-", "/")
+            df_cleaned, grouped_average, used_start_date, used_end_date = process_die_attack_data_with_date_range(file_path, start_date_fmt, end_date_fmt)
+        else:
+            df_cleaned, grouped_average, used_start_date, used_end_date = process_die_attack_data(file_path)
+        cleaned_file, average_file = save_results(df_cleaned, grouped_average, used_start_date, used_end_date, temp_root)
+        print("DEBUG: average_file path =", average_file)
+        print(f"✅ ช่วงวันที่ที่ประมวลผลจริง: {used_start_date} ถึง {used_end_date}")
+        if not os.path.exists(average_file):
+            print("❌ ไม่พบไฟล์ average_file:", average_file)
+            return None
+        return average_file
+    except Exception as e:
+        print(f"❌ DA_AUTO_UPH error: {e}")
+        return None
 
