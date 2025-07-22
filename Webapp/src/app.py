@@ -7,18 +7,45 @@ import json
 import pandas as pd
 import requests
 import sys
+import time
+import threading
 
-# เพิ่ม path สำหรับ src และ src/functions เพื่อให้ importlib หา module เจอ
-SRC_PATH = os.path.join(os.getcwd(), "src")
-FUNCTIONS_PATH = os.path.join(SRC_PATH, "functions")
-if SRC_PATH not in sys.path:
-    sys.path.append(SRC_PATH)
+# เพิ่ม path สำหรับ functions เพื่อให้ importlib หา module เจอ
+FUNCTIONS_PATH = os.path.join(os.getcwd(), "functions")
 if FUNCTIONS_PATH not in sys.path:
     sys.path.append(FUNCTIONS_PATH)
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"
 app.api_base_url = "http://th3sroeeeng4/RTMSAPI/ApiAutoUph/api"
+
+# Progress tracking system
+progress_data = {}
+
+class ProgressTracker:
+    def __init__(self, task_id):
+        self.task_id = task_id
+        self.progress = 0
+        self.status = "เริ่มต้น..."
+        self.completed = False
+        self.error = None
+        progress_data[task_id] = self
+    
+    def update(self, progress, status):
+        self.progress = progress
+        self.status = status
+        progress_data[self.task_id] = self
+    
+    def complete(self, status="เสร็จสิ้น"):
+        self.progress = 100
+        self.status = status
+        self.completed = True
+        progress_data[self.task_id] = self
+    
+    def error_occurred(self, error_msg):
+        self.error = error_msg
+        self.status = f"เกิดข้อผิดพลาด: {error_msg}"
+        progress_data[self.task_id] = self
 
 # Mapping operation -> function list
 OPERATION_FUNCTIONS = {
@@ -66,10 +93,15 @@ def method():
             if not selected_folder:
                 flash("กรุณาเลือกโฟลเดอร์ก่อน", "error")
                 return redirect(url_for("method", operation=operation))
-            src_folder = os.path.join(os.getcwd(), selected_folder)
+            
+            # แก้ไข: ใช้ path ที่ถูกต้องในการเข้าถึงโฟลเดอร์ข้อมูล
+            src_dir = os.path.dirname(os.path.abspath(__file__))
+            src_folder = os.path.join(src_dir, selected_folder)
+
             if not os.path.exists(src_folder):
-                flash("ไม่พบโฟลเดอร์ที่เลือก", "error")
+                flash(f"ไม่พบโฟลเดอร์ที่เลือก: {src_folder}", "error")
                 return redirect(url_for("method", operation=operation))
+            
             temp_folder = tempfile.mkdtemp(dir=temp_root)
             copied_files = []
             if selected_files:
@@ -145,7 +177,27 @@ def method():
         src_folder = os.path.join(os.getcwd(), selected_folder)
         if os.path.exists(src_folder):
             folder_files = [f for f in os.listdir(src_folder) if os.path.isfile(os.path.join(src_folder, f))]
-    return render_template("method.html", operation=operation, folder_files=folder_files)
+    
+    # เพิ่มรายชื่อโฟลเดอร์ข้อมูลที่มี
+    data_folders = []
+    # ใช้ path ของไฟล์ปัจจุบัน เพื่อให้ค้นหาโฟลเดอร์ข้อมูลได้ถูกตำแหน่ง
+    src_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if os.path.exists(src_dir):
+        all_items = os.listdir(src_dir)
+        
+        for item in all_items:
+            item_path = os.path.join(src_dir, item)
+            if os.path.isdir(item_path) and item.startswith('data_'):
+                # นับจำนวนไฟล์ในโฟลเดอร์
+                file_count = len([f for f in os.listdir(item_path) if os.path.isfile(os.path.join(item_path, f))])
+                data_folders.append({
+                    'name': item,
+                    'path': item,  # แก้ path ให้ถูกต้อง
+                    'file_count': file_count
+                })
+    
+    return render_template("method.html", operation=operation, folder_files=folder_files, data_folders=data_folders)
 
 @app.route("/function", methods=["GET", "POST"])
 def function():
@@ -170,45 +222,47 @@ def function():
         elif input_method == "api":
             file_path = session.get("api_json_path")
 
-        # ประมวลผลฟังก์ชัน
-        try:
-            import importlib
-            import pandas as pd
-            func_module = importlib.import_module(f"functions.{func_name.lower()}")
-            func = getattr(func_module, func_name)
-            temp_root = os.path.join(os.getcwd(), "temp")
-            if isinstance(file_path, list):
-                result = [func(f, temp_root) for f in file_path]
-            else:
-                if func_name in ["DA_AUTO_UPH", "PNP_AUTO_UPH", "WB_AUTO_UPH"]:
-                    result = func(file_path, temp_root, start_date, end_date)
-                else:
-                    result = func(file_path, temp_root)
-        except Exception as e:
-            result = f"เกิดข้อผิดพลาดในการเรียกใช้ฟังก์ชัน {func_name}: {e}"
+        # สร้าง task ID สำหรับ progress tracking
+        task_id = f"task_{int(time.time())}_{func_name}"
+        session["current_task_id"] = task_id
 
-        # --- สร้างไฟล์ผลลัพธ์สำหรับดาวน์โหลด ---
-        export_file_path = None
-        temp_root = os.path.join(os.getcwd(), "temp")
-        print("DEBUG result:", result)
-        if isinstance(result, pd.DataFrame):
-            export_file_path = os.path.join(temp_root, f"result_{operation}_{func_name}.xlsx")
-            result.to_excel(export_file_path, index=False)
-        elif isinstance(result, list):
-            # ถ้าเป็น list ของ path ให้ใช้ตัวแรกที่เป็นไฟล์จริง
-            for r in result:
-                if isinstance(r, str) and os.path.exists(r):
-                    export_file_path = r
-                    break
-        elif isinstance(result, str) and os.path.exists(result):
-            export_file_path = result
-        session["export_file_path"] = export_file_path
+        # เริ่มประมวลผลในเธรดแยก
+        def background_processing():
+            try:
+                temp_root = os.path.join(os.getcwd(), "temp")
+                result = process_with_progress(func_name, file_path, temp_root, start_date, end_date, task_id)
+                
+                # --- สร้างไฟล์ผลลัพธ์สำหรับดาวน์โหลด ---
+                export_file_path = None
+                if isinstance(result, pd.DataFrame):
+                    export_file_path = os.path.join(temp_root, f"result_{operation}_{func_name}.xlsx")
+                    result.to_excel(export_file_path, index=False)
+                elif isinstance(result, list):
+                    # ถ้าเป็น list ของ path ให้ใช้ตัวแรกที่เป็นไฟล์จริง
+                    for r in result:
+                        if isinstance(r, str) and os.path.exists(r):
+                            export_file_path = r
+                            break
+                elif isinstance(result, str) and os.path.exists(result):
+                    export_file_path = result
+                
+                session["export_file_path"] = export_file_path
+                session["current_file"] = file_path
+                session["operation"] = operation
+                session["func_name"] = func_name
+                
+            except Exception as e:
+                tracker = progress_data.get(task_id)
+                if tracker:
+                    tracker.error_occurred(str(e))
 
-        # ไม่ต้องเก็บ result_data ใน session อีกต่อไป
-        session["current_file"] = file_path
-        session["operation"] = operation
-        session["func_name"] = func_name
-        return redirect(url_for("result"))
+        # เริ่มเธรดประมวลผล
+        thread = threading.Thread(target=background_processing)
+        thread.daemon = True
+        thread.start()
+
+        # ส่งไปหน้า processing
+        return render_template("processing.html", task_id=task_id, func_name=func_name, operation=operation)
 
     # GET: render หน้าเลือกฟังก์ชัน (เพิ่ม preview date range)
     input_method = session.get("input_method")
@@ -331,6 +385,107 @@ def get_api_data():
                 }), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# === API สำหรับดึงไฟล์ในโฟลเดอร์ ===
+@app.route("/api/folder_files", methods=["GET"])
+def get_folder_files():
+    """ดึงรายชื่อไฟล์ในโฟลเดอร์ที่เลือก"""
+    try:
+        folder_path = request.args.get("folder_path")
+        if not folder_path:
+            return jsonify({"error": "No folder path provided"}), 400
+        
+        full_path = os.path.join(os.getcwd(), folder_path)
+        if not os.path.exists(full_path):
+            return jsonify({"error": f"Folder not found: {folder_path}"}), 404
+        
+        files = []
+        for filename in os.listdir(full_path):
+            file_path = os.path.join(full_path, filename)
+            if os.path.isfile(file_path):
+                file_size = os.path.getsize(file_path)
+                files.append({
+                    'name': filename,
+                    'size': file_size,
+                    'size_mb': round(file_size / (1024 * 1024), 2)
+                })
+        
+        # เรียงตามชื่อไฟล์
+        files.sort(key=lambda x: x['name'])
+        
+        return jsonify({
+            "folder": folder_path,
+            "files": files,
+            "file_count": len(files)
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# === API สำหรับ Progress Tracking ===
+@app.route("/api/progress/<task_id>", methods=["GET"])
+def get_progress(task_id):
+    """ดึงความคืบหน้าของงาน"""
+    try:
+        if task_id not in progress_data:
+            return jsonify({"error": "Task not found"}), 404
+        
+        tracker = progress_data[task_id]
+        return jsonify({
+            "task_id": task_id,
+            "progress": tracker.progress,
+            "status": tracker.status,
+            "completed": tracker.completed,
+            "error": tracker.error
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def process_with_progress(func_name, file_path, temp_root, start_date=None, end_date=None, task_id=None):
+    """ประมวลผลพร้อม progress tracking"""
+    try:
+        tracker = ProgressTracker(task_id) if task_id else None
+        
+        if tracker:
+            tracker.update(10, "เริ่มโหลดข้อมูล...")
+            time.sleep(0.5)  # เพื่อให้เห็น progress
+        
+        # Import และเรียกใช้ฟังก์ชัน
+        import importlib
+        func_module = importlib.import_module(f"functions.{func_name.lower()}")
+        func = getattr(func_module, func_name)
+        
+        if tracker:
+            tracker.update(30, "กำลังประมวลผลข้อมูล...")
+            time.sleep(0.5)
+        
+        # เรียกใช้ฟังก์ชัน
+        if isinstance(file_path, list):
+            if tracker:
+                tracker.update(50, f"ประมวลผลไฟล์ทั้งหมด {len(file_path)} ไฟล์...")
+            result = [func(f, temp_root) for f in file_path]
+        else:
+            if func_name in ["DA_AUTO_UPH", "PNP_AUTO_UPH", "WB_AUTO_UPH"]:
+                if tracker:
+                    tracker.update(60, "คำนวณข้อมูล UPH...")
+                result = func(file_path, temp_root, start_date, end_date)
+            else:
+                result = func(file_path, temp_root)
+        
+        if tracker:
+            tracker.update(90, "กำลังสร้างไฟล์ผลลัพธ์...")
+            time.sleep(0.5)
+            tracker.complete("ประมวลผลเสร็จสิ้น!")
+        
+        return result
+        
+    except Exception as e:
+        if tracker:
+            tracker.error_occurred(str(e))
+        raise e
+
+# === WB_AUTO_UPH Function (ใช้ผ่าน /function แบบปกติ) ===
 
 @app.route("/download_result")
 def download_result():

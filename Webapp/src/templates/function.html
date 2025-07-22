@@ -112,7 +112,7 @@
                 <label for="endDate">วันที่สิ้นสุด:</label>
                 <input type="date" name="end_date" id="endDate">
             </div>
-            <button type="submit">ประมวลผล</button>
+            <button type="submit" id="submitBtn">ประมวลผล</button>
         </form>
         {% if date_info %}
             <div class="date-preview" style="margin-top:18px; background:#f5faff; border-radius:8px; padding:12px;">
@@ -135,6 +135,16 @@
             dateFields.style.display = 'none';
         }
     }
+
+    // Handle form submission for WB_AUTO_UPH
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const select = document.getElementById('funcSelect');
+        if (select.value === 'WB_AUTO_UPH') {
+            e.preventDefault();
+            window.location.href = "{{ url_for('wb_auto_uph') }}";
+        }
+    });
+
     window.onload = toggleDateRange;
     </script>
 </body>

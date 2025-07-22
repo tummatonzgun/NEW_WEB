@@ -1,499 +1,1043 @@
 import pandas as pd
 import numpy as np
+from scipy.stats import zscore
 import os
-import sys
 from datetime import datetime
 
-def apply_zscore(df):
-    """ตัด outliers ด้วยวิธี Z-Score (±3 standard deviations)"""
-    col_map = {col.lower(): col for col in df.columns}
-    if 'uph' not in col_map:
-        raise KeyError("ไม่พบคอลัมน์ UPH ในข้อมูล")
-    uph_col = col_map['uph']
-
-    mean = df[uph_col].mean()
-    std = df[uph_col].std()
-    if std == 0:
-        return df  # ถ้า std = 0, return ค่าเดิม
-    z_scores = (df[uph_col] - mean) / std
-    filtered = df[(z_scores >= -3) & (z_scores <= 3)].copy()
-    filtered['Outlier_Method'] = 'Z-Score ±3'
-    return filtered
-
-def has_outlier(df):
-    """ตรวจสอบว่ามี outliers หรือไม่ด้วยวิธี IQR"""
-    col_map = {col.lower(): col for col in df.columns}
-    if 'uph' not in col_map:
-        raise KeyError("ไม่พบคอลัมน์ UPH ในข้อมูล")
-    uph_col = col_map['uph']
-
-    Q1 = df[uph_col].quantile(0.25)
-    Q3 = df[uph_col].quantile(0.75)
-    IQR = Q3 - Q1
-    lower = Q1 - 1.5 * IQR
-    upper = Q3 + 1.5 * IQR
-    return ((df[uph_col] < lower) | (df[uph_col] > upper)).sum() > 0
-
-def apply_iqr(df):
-    """ตัด outliers ด้วยวิธี IQR (Interquartile Range)"""
-    col_map = {col.lower(): col for col in df.columns}
-    if 'uph' not in col_map:
-        raise KeyError("ไม่พบคอลัมน์ UPH ในข้อมูล")
-    uph_col = col_map['uph']
-
-    Q1 = df[uph_col].quantile(0.25)
-    Q3 = df[uph_col].quantile(0.75)
-    IQR = Q3 - Q1
-    lower = Q1 - 1.5 * IQR
-    upper = Q3 + 1.5 * IQR
-    filtered = df[(df[uph_col] >= lower) & (df[uph_col] <= upper)].copy()
-    filtered['Outlier_Method'] = 'IQR'
-    return filtered
-
-def remove_outliers_auto(df_model, max_iter=20):
-    """ตัด outliers อัตโนมัติด้วยการใช้ Z-Score และ IQR แบบวนลูป"""
-    col_map = {col.lower(): col for col in df_model.columns}
-    if 'uph' not in col_map:
-        raise KeyError("ไม่พบคอลัมน์ UPH ในข้อมูล")
-    uph_col = col_map['uph']
-
-    df_model[uph_col] = pd.to_numeric(df_model[uph_col], errors='coerce')
-    df_model = df_model.dropna(subset=[uph_col])
-
-    if len(df_model) < 15:  
-        df_model['Outlier_Method'] = 'ไม่ตัด (ข้อมูลน้อย)'
-        return df_model
-
-    current_df = df_model.copy()
-
-    for i in range(max_iter):
-        print(f"=== รอบที่ {i+1} ===")
-        z_df = apply_zscore(current_df)
-        if not has_outlier(z_df):
-            z_df['Outlier_Method'] = f'Z-Score Loop ×{i+1}'
-            return z_df
-
-        iqr_df = apply_iqr(z_df)
-        if not has_outlier(iqr_df):
-            iqr_df['Outlier_Method'] = f'IQR Loop ×{i+1}'
-            return iqr_df
-
-        current_df = iqr_df
-
-    current_df['Outlier_Method'] = f'IQR-Z-Score Loop ×{max_iter}+'
-    return current_df
-
-def remove_outliers(df):
-    """ตัด outliers ตามกลุ่ม BOM และ Machine Model"""
-    col_map = {col.lower(): col for col in df.columns}
+class WireBondingAnalyzer:
+    def __init__(self):
+        self.nobump_df = None
+        self.wb_data = None
+        self.efficiency_df = None
+        self.raw_data = None
     
-    # หาคอลัมน์ Machine Model
-    model_col = None
-    if 'machine model' in col_map:
-        model_col = col_map['machine model']
-    elif 'machine_model' in col_map:
-        model_col = col_map['machine_model']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ Machine Model หรือ Machine_Model ในข้อมูล")
-    
-    # หาคอลัมน์ bom_no
-    bom_col = None
-    if 'bom_no' in col_map:
-        bom_col = col_map['bom_no']
-    elif 'bom no' in col_map:
-        bom_col = col_map['bom no']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ bom_no ในข้อมูล")
-    
-    # รวมข้อมูลที่ผ่านการตัด outliers ตามกลุ่ม bom_no และ Machine Model
-    result_dfs = []
-    
-    # จัดกลุ่มตาม bom_no และ Machine Model
-    for (bom_no, machine_model), group_df in df.groupby([bom_col, model_col]):
-        print(f"ประมวลผลกลุ่ม: BOM={bom_no}, Machine={machine_model}, จำนวนข้อมูล={len(group_df)}")
+    def normalize_model_name(self, model_name):
+        """ทำความสะอาดและรวมชื่อรุ่นเครื่องที่คล้ายกัน"""
+        if not isinstance(model_name, str):
+            model_name = str(model_name)
         
-        # ตัด outliers สำหรับแต่ละกลุ่ม
-        cleaned_group = remove_outliers_auto(group_df)
-        result_dfs.append(cleaned_group)
-    
-    # รวมผลลัพธ์ทั้งหมด
-    return pd.concat(result_dfs, ignore_index=True)
+        model_name = model_name.strip().upper()
+        
+        # รวม WB3100 ทุกเวอร์ชัน
+        if 'WB3100' in model_name:
+            return 'WB3100'
+        
+        # สามารถเพิ่มกฎการรวมรุ่นอื่นๆ ที่นี่
+        if 'WB3200' in model_name:
+            return 'WB3200'
+        
+        if 'WB3300' in model_name:
+            return 'WB3300'
+            
+        return model_name
 
-def time_series_analysis(df):
-    """แปลงข้อมูลวันที่ให้อยู่ในรูปแบบที่ใช้งานได้"""
-    col_map = {col.lower(): col for col in df.columns}
-    
-    # หาคอลัมน์วันที่ที่เป็นไปได้
-    date_cols = []
-    for col_name in df.columns:
-        if any(keyword in col_name.lower() for keyword in ['date', 'time', 'วัน', 'เวลา']):
-            date_cols.append(col_name)
-    
-    if not date_cols:
-        print("ไม่พบคอลัมน์วันที่ในข้อมูล")
+    def clean_model_names(self, df):
+        """ทำความสะอาดชื่อรุ่นเครื่อง"""
+        df = df.copy()
+        if 'machine model' in df.columns:
+            df['machine model'] = df['machine model'].apply(self.normalize_model_name)
         return df
     
-    # ใช้คอลัมน์วันที่แรกที่พบ
-    date_col = date_cols[0]
-    print(f"ใช้คอลัมน์วันที่: {date_col}")
+    def find_wire_data_file(self, directory_path=None):
+        """หาไฟล์ Wire Data ในโฟลเดอร์ data_wireWB (สำหรับเว็บ)"""
+        try:
+            # ใช้ path ตายตัวสำหรับ data_wireWB
+            if directory_path is None:
+                # หา path ของ data_wireWB จาก current directory
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                src_dir = os.path.dirname(current_dir)
+                wire_dir = os.path.join(src_dir, "data_wireWB")
+            else:
+                wire_dir = directory_path
+            
+            if not os.path.exists(wire_dir):
+                print(f"Wire data directory not found: {wire_dir}")
+                return None
+            
+            wire_files = []
+            for filename in os.listdir(wire_dir):
+                if (filename.lower().endswith(('.xlsx', '.xls')) and 
+                    ('wire' in filename.lower() or 'book' in filename.lower())):
+                    wire_files.append(os.path.join(wire_dir, filename))
+            
+            if not wire_files:
+                print(f"No Wire data file found in: {wire_dir}")
+                return None
+            
+            if len(wire_files) > 1:
+                print(f"Multiple Wire files found: {[os.path.basename(f) for f in wire_files]}")
+                print(f"Using the first one: {os.path.basename(wire_files[0])}")
+            
+            print(f"🔗 Using Wire data file: {os.path.basename(wire_files[0])}")
+            return wire_files[0]
+        
+        except Exception as e:
+            print(f"Error finding Wire data file: {e}")
+            return None
     
-    # แปลงเป็น datetime และจัดรูปแบบ
-    df['date_time_start'] = pd.to_datetime(df[date_col], errors='coerce')
+    def load_data(self, uph_path, wire_data_path=None):
+        """โหลดข้อมูลที่จำเป็น"""
+        try:
+            # ถ้าไม่ระบุ wire_data_path ให้หาในโฟลเดอร์เดียวกับ uph_path
+            if wire_data_path is None:
+                directory_path = os.path.dirname(uph_path)
+                wire_data_path = self.find_wire_data_file(directory_path)
+                
+                if wire_data_path is None:
+                    print("Wire data file not found. Please specify the path manually.")
+                    return False
+            
+            # โหลดข้อมูล Wire Data
+            print(f"📊 Loading Wire data from: {os.path.basename(wire_data_path)}")
+            try:
+                self.nobump_df = pd.read_excel(wire_data_path)
+                self.nobump_df.columns = self.nobump_df.columns.str.strip().str.upper()
+                print(f"✅ Wire data loaded: {len(self.nobump_df)} rows, columns: {list(self.nobump_df.columns)}")
+            except Exception as e:
+                print(f"❌ Error loading Wire data: {e}")
+                return False
+            
+            # โหลดข้อมูล UPH
+            print(f"📊 Loading UPH data from: {os.path.basename(uph_path)}")
+            try:
+                if uph_path.endswith('.csv'):
+                    self.raw_data = pd.read_csv(uph_path, encoding='utf-8-sig')
+                else:
+                    self.raw_data = pd.read_excel(uph_path)
+                
+                # ทำความสะอาดคอลัมน์
+                self.raw_data.columns = self.raw_data.columns.str.strip().str.lower()
+                
+                # แก้ไขชื่อคอลัมน์ให้เป็นมาตรฐาน
+                if 'machine_model' in self.raw_data.columns:
+                    self.raw_data.rename(columns={'machine_model': 'machine model'}, inplace=True)
+                
+                print(f"✅ UPH data loaded: {len(self.raw_data)} rows, columns: {list(self.raw_data.columns)}")
+                
+                # ตรวจสอบคอลัมน์ที่จำเป็น
+                required_columns = ['uph', 'machine model', 'bom_no']
+                missing_columns = [col for col in required_columns if col not in self.raw_data.columns]
+                
+                if missing_columns:
+                    print(f"❌ Missing required columns in UPH data: {missing_columns}")
+                    print(f"📋 Available columns: {list(self.raw_data.columns)}")
+                    return False
+                
+            except Exception as e:
+                print(f"❌ Error loading UPH data: {e}")
+                return False
+            
+            print("✅ Data loaded successfully!")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error loading data: {e}")
+            return False
     
-    # จัดรูปแบบเป็น YYYY/MM/DD
-    df['date_time_start'] = df['date_time_start'].dt.strftime('%Y/%m/%d')
+    def calculate_wire_per_unit(self, bom_no):
+        """คำนวณจำนวนสายต่อหน่วย"""
+        try:
+            bom_no = str(bom_no).strip().upper()
+            bom_data = self.nobump_df[self.nobump_df['BOM_NO'].astype(str).str.strip().str.upper() == bom_no]
+            
+            if bom_data.empty:
+                return 1.0
+            
+            no_bump = float(bom_data['NO_BUMP'].iloc[0]) if 'NO_BUMP' in bom_data.columns and not bom_data['NO_BUMP'].empty else 0
+            num_required = float(bom_data['NUMBER_REQUIRED'].iloc[0]) if 'NUMBER_REQUIRED' in bom_data.columns and not bom_data['NUMBER_REQUIRED'].empty else 0
+            
+            wire_per_unit = (no_bump / 2) + num_required
+            return wire_per_unit if wire_per_unit > 0 else 1.0
+        except Exception as e:
+            print(f"Error calculating wire per unit for BOM {bom_no}: {e}")
+            return 1.0
     
-    # กรองข้อมูลที่แปลงไม่ได้
-    invalid_dates = df['date_time_start'].isna().sum()
-    if invalid_dates > 0:
-        print(f"พบวันที่ที่แปลงไม่ได้: {invalid_dates} แถว")
-        df = df.dropna(subset=['date_time_start'])
+    def remove_outliers(self, df):
+        """ลบ outliers จากข้อมูลแบ่งตาม BOM และ Machine Model"""
+        try:
+            if df.empty:
+                return df, {}
+                
+            df = self.clean_model_names(df)
+            
+            # ตรวจสอบคอลัมน์ที่จำเป็น
+            required_cols = ['uph', 'machine model', 'bom_no']
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                raise KeyError(f"Missing required columns: {missing_cols}")
+            
+            # แบ่งข้อมูลตาม BOM และ Machine Model
+            grouped = df.groupby(['bom_no', 'machine model'])
+            cleaned_data = []
+            outlier_info = {}
+            
+            for (bom_no, model), group_data in grouped:
+                group_data = group_data.copy()
+                original_count = len(group_data)
+                
+                # ข้ามถ้าข้อมูลน้อยกว่า 15 จุด
+                if len(group_data) < 15:
+                    cleaned_data.append(group_data)
+                    outlier_info[(bom_no, model)] = {
+                        'original_count': original_count,
+                        'removed_count': 0,
+                        'final_count': original_count
+                    }
+                    continue
+                
+                # กระบวนการตัด Outlier แบบอัตโนมัติ
+                current_data = group_data
+                
+                for iteration in range(20):  # จำกัดจำนวนรอบ
+                    # ใช้ Z-Score (±3σ)
+                    z_threshold = 3
+                    z_scores = zscore(current_data['uph'])
+                    z_filtered = current_data[(z_scores >= -z_threshold) & (z_scores <= z_threshold)]
+                    
+                    # ตรวจสอบว่ายังมี Outlier หรือไม่
+                    if not self._has_outliers(z_filtered['uph']):
+                        current_data = z_filtered
+                        break
+                    
+                    # ใช้ IQR (1.5*IQR)
+                    Q1 = current_data['uph'].quantile(0.25)
+                    Q3 = current_data['uph'].quantile(0.75)
+                    IQR = Q3 - Q1
+                    iqr_filtered = current_data[
+                        (current_data['uph'] >= Q1 - 1.5*IQR) & 
+                        (current_data['uph'] <= Q3 + 1.5*IQR)]
+                    
+                    if not self._has_outliers(iqr_filtered['uph']):
+                        current_data = iqr_filtered
+                        break
+                    
+                    current_data = iqr_filtered
+                
+                cleaned_data.append(current_data)
+                final_count = len(current_data)
+                
+                # เก็บข้อมูลการตัด outlier
+                outlier_info[(bom_no, model)] = {
+                    'original_count': original_count,
+                    'removed_count': original_count - final_count,
+                    'final_count': final_count
+                }
+            
+            result_df = pd.concat(cleaned_data) if cleaned_data else df
+            return result_df, outlier_info
+        
+        except Exception as e:
+            print(f"Error in remove_outliers: {e}")
+            return df, {}
     
-    print(f"แปลงวันที่เสร็จสิ้น รูปแบบ: {df['date_time_start'].iloc[0] if len(df) > 0 else 'ไม่มีข้อมูล'}")
+    def _has_outliers(self, series):
+        """ตรวจสอบว่ายังมี Outlier หรือไม่"""
+        if len(series) < 3:
+            return False
+        z_scores = zscore(series)
+        return (abs(z_scores) > 3).any()
     
-    return df
+    def preprocess_data(self):
+        """เตรียมข้อมูลก่อนคำนวณ"""
+        try:
+            if self.raw_data is None:
+                raise ValueError("No data loaded")
+            
+            # คัดลอกข้อมูลและทำความสะอาด
+            df = self.raw_data.copy()
+            df.columns = df.columns.str.strip().str.lower()
+            
+            # ตรวจสอบคอลัมน์ที่จำเป็น
+            required_cols = ['uph', 'machine model', 'bom_no']
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                raise KeyError(f"Missing required columns: {missing_cols}")
+            
+            # แปลงประเภทข้อมูล
+            df['uph'] = pd.to_numeric(df['uph'], errors='coerce')
+            df['bom_no'] = df['bom_no'].astype(str).str.strip().str.upper()
+            
+            # ลบแถวที่ไม่มีค่า UPH หรือ BOM_NO
+            df = df.dropna(subset=['uph', 'bom_no'])
+            
+            # ทำความสะอาดชื่อรุ่นเครื่อง (เวอร์ชันปรับปรุง)
+            df = self.clean_model_names(df)
+            
+            self.wb_data = df
+            return True
+        
+        except Exception as e:
+            print(f"Error in preprocess_data: {e}")
+            return False
     
-def find_max_or_min_date(df):
-    if 'date_time_start' not in df.columns:
-        raise KeyError("ไม่พบคอลัมน์ date_time_start ในข้อมูล")
+    def calculate_efficiency(self):
+        """คำนวณประสิทธิภาพการทำงาน"""
+        try:
+            print(f"🔄 Starting calculate_efficiency...")
+            
+            if not self.preprocess_data():
+                print(f"❌ Preprocess data failed")
+                return None
+            
+            print(f"📊 Preprocessing completed. Data shape: {self.wb_data.shape}")
+            
+            # ตัด Outlier และเก็บข้อมูลการตัด
+            cleaned_data, outlier_info = self.remove_outliers(self.wb_data)
+            
+            if cleaned_data.empty:
+                print(f"❌ No data remaining after outlier removal")
+                return None
+            
+            print(f"📊 After outlier removal. Data shape: {cleaned_data.shape}")
+            
+            # กลุ่มข้อมูลตาม BOM และรุ่นเครื่อง
+            grouped = cleaned_data.groupby(['bom_no', 'machine model'])
+            results = []
+            
+            print(f"📊 Processing {len(grouped)} groups...")
+            
+            for i, ((bom_no, model), group) in enumerate(grouped):
+                try:
+                    print(f"🔍 Processing group {i+1}/{len(grouped)}: BOM={bom_no}, Model={model}")
+                    
+                    # คำนวณค่าเฉลี่ย UPH
+                    mean_uph = group['uph'].mean()
+                    count = len(group)
+                    
+                    print(f"   📈 Mean UPH: {mean_uph:.2f}, Count: {count}")
+                    
+                    # คำนวณ Wire Per Unit
+                    wire_per_unit = self.calculate_wire_per_unit(bom_no)
+                    print(f"   🔌 Wire Per Unit: {wire_per_unit:.2f}")
+                    
+                    # คำนวณประสิทธิภาพ (UPH)
+                    efficiency = mean_uph / wire_per_unit if wire_per_unit > 0 else 0
+                    print(f"   ⚡ Efficiency (UPH): {efficiency:.3f}")
+                    
+                    # ดึงข้อมูลเพิ่มเติม
+                    operation = group['operation'].iloc[0] if 'operation' in group.columns else 'N/A'
+                    optn_code = group['optn_code'].iloc[0] if 'optn_code' in group.columns else 'N/A'
+                    
+                    # ดึงข้อมูล date_time_start ถ้ามี
+                    date_time_start = group['date_time_start'].iloc[0] if 'date_time_start' in group.columns else 'N/A'
+                    
+                    # ดึงข้อมูลการตัด outlier
+                    outlier_data = outlier_info.get((bom_no, model), {
+                        'original_count': count,
+                        'removed_count': 0,
+                        'final_count': count
+                    })
+                    
+                    result_entry = {
+                        'Date_Time_Start': date_time_start,
+                        'BOM': bom_no,
+                        'Model': model,
+                        'Operation': operation,
+                        'Optn_Code': optn_code,
+                        'Wire Per Hour': round(mean_uph, 2),
+                        'Wire_Per_Unit': round(wire_per_unit, 2),
+                        'UPH': round(efficiency, 3),
+                        'Data_Points': count,
+                        'Original_Count': outlier_data['original_count'],
+                        'Outliers_Removed': outlier_data['removed_count']
+                    }
+                    
+                    results.append(result_entry)
+                    print(f"   ✅ Group processed successfully")
+                    
+                except Exception as group_error:
+                    print(f"   ❌ Error processing group {bom_no}-{model}: {group_error}")
+                    continue
+            
+            if not results:
+                print(f"❌ No results generated")
+                return None
+            
+            self.efficiency_df = pd.DataFrame(results)
+            print(f"✅ Efficiency calculation completed. Generated {len(self.efficiency_df)} results")
+            
+            return self.efficiency_df
+        
+        except Exception as e:
+            print(f"❌ Error in calculate_efficiency: {e}")
+            import traceback
+            print(f"🔍 Traceback: {traceback.format_exc()}")
+            return None
+    
+    def export_to_excel(self, file_path=None):
+        """ส่งออกผลลัพธ์เป็นไฟล์ Excel"""
+        print(f"🔄 Starting export_to_excel...")
+        
+        if self.efficiency_df is None:
+            print(f"❌ Export failed: efficiency_df is None")
+            return False
+            
+        if self.efficiency_df.empty:
+            print(f"❌ Export failed: efficiency_df is empty")
+            return False
+        
+        print(f"📊 Data to export: {len(self.efficiency_df)} rows")
+        
+        try:
+            # สร้างโฟลเดอร์ output_WB_AUTO_UPH หากยังไม่มี
+            output_dir = 'output_WB_AUTO_UPH'
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+                print(f"📁 Created output directory: {output_dir}")
+            
+            # กำหนดชื่อไฟล์เริ่มต้นหากไม่ระบุ
+            if file_path is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                file_path = os.path.join(output_dir, f'wb_analysis_results_{timestamp}.xlsx')
+            else:
+                # ตรวจสอบว่าได้ระบุโฟลเดอร์หรือไม่ หากไม่ระบุให้ใช้ output_dir
+                if not os.path.dirname(file_path):
+                    file_path = os.path.join(output_dir, file_path)
+            
+            print(f"📄 Export file path: {file_path}")
+            
+            # ตรวจสอบและสร้างโฟลเดอร์ที่ต้องการ
+            output_directory = os.path.dirname(file_path)
+            if output_directory and not os.path.exists(output_directory):
+                os.makedirs(output_directory)
+                print(f"📁 Created directory: {output_directory}")
+            
+            # ตรวจสอบสิทธิ์การเขียน
+            try:
+                test_file = os.path.join(output_directory, 'test_write.tmp')
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                os.remove(test_file)
+                print(f"✅ Write permission verified for: {output_directory}")
+            except Exception as perm_error:
+                print(f"❌ Write permission error: {perm_error}")
+                return False
+            
+            # เริ่มส่งออก Excel
+            print(f"📝 Starting Excel export...")
+            
+            try:
+                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                    # Sheet 1: ผลลัพธ์ UPH
+                    print(f"✏️ Writing UPH_Results sheet...")
+                    self.efficiency_df.to_excel(
+                        writer, sheet_name='UPH_Results', index=False)
+                    
+                    # Sheet 2: สรุปตามรุ่นเครื่อง (ถ้ามีข้อมูลเพียงพอ)
+                    if len(self.efficiency_df) > 0:
+                        try:
+                            print(f"✏️ Writing Model_Summary sheet...")
+                            model_summary = self.efficiency_df.groupby('Model').agg({
+                                'UPH': ['mean', 'std', 'count', 'min', 'max'],
+                                'Wire Per Hour': 'mean',
+                                'Wire_Per_Unit': 'mean'
+                            }).round(3)
+                            model_summary.to_excel(writer, sheet_name='Model_Summary')
+                        except Exception as model_error:
+                            print(f"⚠️ Warning: Could not create Model_Summary sheet: {model_error}")
+                    
+                    # Sheet 3: สรุปภาพรวม
+                    try:
+                        print(f"✏️ Writing Overall_Summary sheet...")
+                        overall_stats = {
+                            'Average_UPH': round(self.efficiency_df['UPH'].mean(), 3),
+                            'Average_WPH': round(self.efficiency_df['Wire Per Hour'].mean(), 2),
+                            'Total_Groups': len(self.efficiency_df),
+                            'Total_Data_Points': self.efficiency_df['Data_Points'].sum(),
+                            'Total_Outliers_Removed': self.efficiency_df['Outliers_Removed'].sum()
+                        }
+                        overall_df = pd.DataFrame.from_dict(
+                            overall_stats, orient='index', columns=['Value'])
+                        overall_df.to_excel(writer, sheet_name='Overall_Summary')
+                    except Exception as overall_error:
+                        print(f"⚠️ Warning: Could not create Overall_Summary sheet: {overall_error}")
+                
+                print(f"✅ Excel file created successfully")
+                        
+            except Exception as excel_error:
+                print(f"❌ Excel export error: {excel_error}")
+                print(f"🔄 Trying alternative method with xlsxwriter...")
+                
+                # ลองใช้ xlsxwriter แทน
+                try:
+                    with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+                        self.efficiency_df.to_excel(
+                            writer, sheet_name='UPH_Results', index=False)
+                    print(f"✅ Excel file created with xlsxwriter")
+                except Exception as xlsxwriter_error:
+                    print(f"❌ xlsxwriter also failed: {xlsxwriter_error}")
+                    return False
+            
+            # ตรวจสอบว่าไฟล์ถูกสร้างจริงและมีขนาดมากกว่า 0
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+                print(f"✅ File created successfully: {file_path} (size: {file_size} bytes)")
+                if file_size > 0:
+                    return True
+                else:
+                    print(f"❌ File was created but is empty")
+                    return False
+            else:
+                print(f"❌ File was not created: {file_path}")
+                return False
+        
+        except Exception as e:
+            print(f"❌ Unexpected error in export_to_excel: {e}")
+            import traceback
+            print(f"🔍 Traceback: {traceback.format_exc()}")
+            return False
 
-    max_date = df['date_time_start'].max()
-    min_date = df['date_time_start'].min()
-    return max_date, min_date
+# === Web Interface Functions ===
+def get_available_uph_files():
+    """ดึงรายชื่อไฟล์ UPH ที่มีในโฟลเดอร์ data_WB สำหรับเว็บ"""
+    try:
+        # หา path ของ data_WB จาก current directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.dirname(current_dir)
+        uph_dir = os.path.join(src_dir, "data_WB")
+        
+        if not os.path.exists(uph_dir):
+            return []
+        
+        uph_files = []
+        for filename in os.listdir(uph_dir):
+            if (filename.lower().endswith(('.xlsx', '.xls')) and 
+                ('uph' in filename.lower() or 'apl' in filename.lower() or 'wb_data' in filename.lower())):
+                uph_files.append({
+                    'filename': filename,
+                    'filepath': os.path.join(uph_dir, filename),
+                    'size': os.path.getsize(os.path.join(uph_dir, filename))
+                })
+        
+        # เรียงตามชื่อไฟล์
+        uph_files.sort(key=lambda x: x['filename'])
+        return uph_files
+        
+    except Exception as e:
+        print(f"Error getting UPH files: {e}")
+        return []
 
-def get_date_range_auto(df):
-    """สร้างช่วงวันที่อัตโนมัติ (ใช้ทั้งหมด)"""
-    max_date, min_date = find_max_or_min_date(df)
-    print(f"ใช้ช่วงวันที่ทั้งหมด: {min_date} ถึง {max_date}")
-    return min_date, max_date
-
-def filter_data_by_date(df, start_date, end_date):
-    """กรองข้อมูลตามช่วงวันที่ที่เลือก"""
-    print(f"\n=== กรองข้อมูลตามช่วงวันที่ {start_date} ถึง {end_date} ===")
-    
-    # กรองข้อมูลตามช่วงวันที่
-    filtered_df = df[df['date_time_start'].between(start_date, end_date)].copy()
-    
-    if len(filtered_df) == 0:
-        print("ไม่พบข้อมูลในช่วงวันที่ที่เลือก")
+def get_wire_data_file():
+    """ดึง path ของไฟล์ Wire Data จากโฟลเดอร์ data_wireWB สำหรับเว็บ"""
+    try:
+        # หา path ของ data_wireWB จาก current directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.dirname(current_dir)
+        wire_dir = os.path.join(src_dir, "data_wireWB")
+        
+        if not os.path.exists(wire_dir):
+            return None
+        
+        for filename in os.listdir(wire_dir):
+            if (filename.lower().endswith(('.xlsx', '.xls')) and 
+                ('wire' in filename.lower() or 'book' in filename.lower())):
+                return {
+                    'filename': filename,
+                    'filepath': os.path.join(wire_dir, filename)
+                }
+        
         return None
-    
-    print(f"พบข้อมูล {len(filtered_df)} แถว ในช่วงวันที่ที่เลือก")
-    print(f"ข้อมูลเดิม: {len(df)} แถว")
-    print(f"ข้อมูลที่กรอง: {len(filtered_df)} แถว ({len(filtered_df)/len(df)*100:.1f}%)")
-    
-    return filtered_df
-
-def calculate_group_average(df, start_date, end_date):
-    """คำนวณค่าเฉลี่ยตามกลุ่ม"""
-    col_map = {col.lower(): col for col in df.columns}
-    
-    # หาคอลัมน์ Machine Model
-    model_col = None
-    if 'machine model' in col_map:
-        model_col = col_map['machine model']
-    elif 'machine_model' in col_map:
-        model_col = col_map['machine_model']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ Machine Model หรือ Machine_Model ในข้อมูล")
-    
-    # หาคอลัมน์ bom_no
-    bom_col = None
-    if 'bom_no' in col_map:
-        bom_col = col_map['bom_no']
-    elif 'bom no' in col_map:
-        bom_col = col_map['bom no']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ bom_no ในข้อมูล")
-    
-    # หาคอลัมน์ UPH
-    uph_col = None
-    if 'uph' in col_map:
-        uph_col = col_map['uph']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ UPH ในข้อมูล")
-    
-    # คำนวณค่าเฉลี่ยตามกลุ่ม
-    grouped_average = df.groupby([bom_col, model_col])[uph_col].mean().reset_index()
-    
-    # แสดงผลลัพธ์
-    print(f"\n=== ค่าเฉลี่ย UPH ตามกลุ่ม (ช่วงวันที่ {start_date} ถึง {end_date}) ===")
-    print(grouped_average)
-    
-    return grouped_average
-
-def save_results(df_cleaned, grouped_average, start_date, end_date, output_dir):
-    """บันทึกผลลัพธ์ลงไฟล์"""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # สร้างชื่อไฟล์ด้วยวันที่และเวลา
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    date_range = f"{start_date.replace('/', '')}_to_{end_date.replace('/', '')}"
-    
-    # บันทึกข้อมูลที่ตัด outliers แล้ว
-    cleaned_file = os.path.join(output_dir, f"cleaned_data_{date_range}_{timestamp}.xlsx")
-    df_cleaned.to_excel(cleaned_file, index=False)
-    print(f"บันทึกข้อมูลที่ตัด outliers แล้ว: {cleaned_file}")
-    
-    # บันทึกค่าเฉลี่ยตามกลุ่ม
-    average_file = os.path.join(output_dir, f"group_average_{date_range}_{timestamp}.xlsx")
-    grouped_average.to_excel(average_file, index=False)
-    print(f"บันทึกค่าเฉลี่ยตามกลุ่ม: {average_file}")
-    
-    return cleaned_file, average_file
-
-def process_die_attack_data(file_path):
-    """ประมวลผลข้อมูล Die Attack"""
-    print("=== เริ่มต้นการประมวลผลข้อมูล Die Attack ===")
-    
-    # อ่านไฟล์ข้อมูล
-    try:
-        df = pd.read_excel(file_path)
-        print(f"ข้อมูลเริ่มต้น: {len(df)} แถว")
+        
     except Exception as e:
-        raise Exception(f"ไม่สามารถอ่านไฟล์ได้: {str(e)}")
-    
-    # ขั้นตอนที่ 1: แปลงข้อมูลวันที่
-    print("\n1. แปลงข้อมูลวันที่...")
-    df = time_series_analysis(df)
-    
-    # ขั้นตอนที่ 2: ใช้ช่วงวันที่ทั้งหมด (อัตโนมัติ)
-    print("\n2. กำหนดช่วงวันที่...")
-    start_date, end_date = get_date_range_auto(df)
-    
-    # ขั้นตอนที่ 3: กรองข้อมูลตามวันที่
-    print("\n3. กรองข้อมูลตามวันที่...")
-    df_filtered = filter_data_by_date(df, start_date, end_date)
-    
-    if df_filtered is None:
-        raise Exception("ไม่มีข้อมูลในช่วงวันที่ที่เลือก")
-    
-    # ขั้นตอนที่ 4: ตัด outliers
-    print("\n4. ตัด outliers...")
-    df_cleaned = remove_outliers(df_filtered)
-    df_cleaned = df_cleaned.reset_index(drop=True)
-    
-    print(f"ข้อมูลหลังตัด outliers: {len(df_cleaned)} แถว")
-    
-    # ขั้นตอนที่ 5: คำนวณค่าเฉลี่ยตามกลุ่ม
-    print("\n5. คำนวณค่าเฉลี่ยตามกลุ่ม...")
-    grouped_average = calculate_group_average(df_cleaned, start_date, end_date)
-    
-    print("\n=== การประมวลผลเสร็จสิ้น ===")
-    print(f"ข้อมูลสุดท้าย: {len(df_cleaned)} แถว")
-    print(f"จำนวนกลุ่ม: {len(grouped_average)} กลุ่ม")
-    
-    return df_cleaned, grouped_average, start_date, end_date
+        print(f"Error getting Wire data file: {e}")
+        return None
 
-def process_die_attack_data_with_date_range(file_path, start_date, end_date):
-    """ประมวลผลข้อมูล Die Attack ด้วยช่วงวันที่ที่กำหนด"""
-    print("=== เริ่มต้นการประมวลผลข้อมูล Die Attack (ช่วงวันที่กำหนด) ===")
+def run_wb_auto_uph_web_multiple(selected_uph_files, output_filename=None):
+    """
+    รันการวิเคราะห์ WB_AUTO_UPH สำหรับหลายไฟล์ UPH และรวมผลลัพธ์
     
-    # อ่านไฟล์ข้อมูล
+    Args:
+        selected_uph_files (list): รายชื่อไฟล์ UPH ที่เลือกจากเว็บ
+        output_filename (str, optional): ชื่อไฟล์ output ที่ต้องการ
+    
+    Returns:
+        dict: ผลลัพธ์การวิเคราะห์
+    """
     try:
-        df = pd.read_excel(file_path)
-        print(f"ข้อมูลเริ่มต้น: {len(df)} แถว")
-    except Exception as e:
-        raise Exception(f"ไม่สามารถอ่านไฟล์ได้: {str(e)}")
-    
-    # ขั้นตอนที่ 1: แปลงข้อมูลวันที่
-    print("\n1. แปลงข้อมูลวันที่...")
-    df = time_series_analysis(df)
-    
-    # ขั้นตอนที่ 2: แปลงวันที่จาก YYYY-MM-DD เป็น YYYY/MM/DD
-    print(f"\n2. ใช้ช่วงวันที่ที่กำหนด: {start_date} ถึง {end_date}")
-    formatted_start_date = start_date.replace('-', '/')
-    formatted_end_date = end_date.replace('-', '/')
-    
-    # ขั้นตอนที่ 3: กรองข้อมูลตามวันที่
-    print("\n3. กรองข้อมูลตามวันที่...")
-    df_filtered = filter_data_by_date(df, formatted_start_date, formatted_end_date)
-    
-    if df_filtered is None:
-        raise Exception("ไม่มีข้อมูลในช่วงวันที่ที่เลือก")
-    
-    # ขั้นตอนที่ 4: ตัด outliers
-    print("\n4. ตัด outliers...")
-    df_cleaned = remove_outliers(df_filtered)
-    df_cleaned = df_cleaned.reset_index(drop=True)
-    
-    print(f"ข้อมูลหลังตัด outliers: {len(df_cleaned)} แถว")
-    
-    # ขั้นตอนที่ 5: คำนวณค่าเฉลี่ยตามกลุ่ม
-    print("\n5. คำนวณค่าเฉลี่ยตามกลุ่ม...")
-    grouped_average = calculate_group_average(df_cleaned, formatted_start_date, formatted_end_date)
-    
-    print("\n=== การประมวลผลเสร็จสิ้น ===")
-    print(f"ข้อมูลสุดท้าย: {len(df_cleaned)} แถว")
-    print(f"จำนวนกลุ่ม: {len(grouped_average)} กลุ่ม")
-    
-    return df_cleaned, grouped_average, formatted_start_date, formatted_end_date
-
-def preview_date_range(file_path):
-    """แสดงข้อมูลวันที่ในไฟล์ก่อนประมวลผล"""
-    try:
-        print("📅 กำลังตรวจสอบช่วงวันที่ในไฟล์...")
+        print(f"🚀 Starting WB_AUTO_UPH Multiple Files Analysis...")
+        print(f"📁 Processing {len(selected_uph_files)} UPH files...")
         
-        # อ่านไฟล์ข้อมูล
-        df = pd.read_excel(file_path)
-        print(f"📄 ไฟล์มีข้อมูลทั้งหมด: {len(df):,} แถว")
+        # หาไฟล์ Wire Data อัตโนมัติ
+        wire_data = get_wire_data_file()
+        if not wire_data:
+            return {
+                'success': False,
+                'error': 'ไม่พบไฟล์ Wire Data ในโฟลเดอร์ data_wireWB'
+            }
         
-        # หาคอลัมน์วันที่
-        date_cols = []
-        for col_name in df.columns:
-            if any(keyword in col_name.lower() for keyword in ['date', 'time', 'วัน', 'เวลา']):
-                date_cols.append(col_name)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.dirname(current_dir)
         
-        if not date_cols:
-            print("⚠️ ไม่พบคอลัมน์วันที่ในข้อมูล")
-            return None
+        # ตรวจสอบว่าไฟล์ UPH ทั้งหมดมีอยู่
+        uph_paths = []
+        for selected_file in selected_uph_files:
+            uph_path = os.path.join(src_dir, "data_WB", selected_file)
+            if not os.path.exists(uph_path):
+                return {
+                    'success': False,
+                    'error': f'ไม่พบไฟล์ UPH: {selected_file}'
+                }
+            uph_paths.append(uph_path)
         
-        date_col = date_cols[0]
-        print(f"🗓️ ใช้คอลัมน์วันที่: '{date_col}'")
+        print(f"📁 Files to process:")
+        print(f"   Wire Data: {wire_data['filename']}")
+        for i, file in enumerate(selected_uph_files):
+            print(f"   UPH Data {i+1}: {file}")
         
-        # แปลงข้อมูลวันที่
-        df['temp_date'] = pd.to_datetime(df[date_col], errors='coerce')
+        # เก็บผลลัพธ์จากทุกไฟล์
+        all_results = []
+        total_groups_all = 0
+        total_outliers_removed_all = 0
+        total_original_data_all = 0
+        total_data_points_all = 0
+        file_summary = []
         
-        # กรองข้อมูลที่แปลงวันที่ได้
-        valid_dates = df.dropna(subset=['temp_date'])
-        invalid_count = len(df) - len(valid_dates)
+        # ประมวลผลแต่ละไฟล์
+        for i, (uph_path, selected_file) in enumerate(zip(uph_paths, selected_uph_files)):
+            print(f"\n🔄 Processing file {i+1}/{len(selected_uph_files)}: {selected_file}")
+            
+            # สร้าง analyzer ใหม่สำหรับแต่ละไฟล์
+            analyzer = WireBondingAnalyzer()
+            
+            # โหลดข้อมูล
+            if not analyzer.load_data(uph_path, wire_data['filepath']):
+                print(f"⚠️ Warning: Could not load data from {selected_file}, skipping...")
+                continue
+            
+            # คำนวณประสิทธิภาพ
+            efficiency_df = analyzer.calculate_efficiency()
+            
+            if efficiency_df is None or efficiency_df.empty:
+                print(f"⚠️ Warning: No results from {selected_file}, skipping...")
+                continue
+            
+            # เพิ่มคอลัมน์ระบุแหล่งที่มาของไฟล์
+            efficiency_df['Source_File'] = selected_file
+            
+            # รวมผลลัพธ์
+            all_results.append(efficiency_df)
+            
+            # สรุปสถิติของไฟล์นี้
+            file_groups = len(efficiency_df)
+            file_outliers = efficiency_df['Outliers_Removed'].sum()
+            file_original = efficiency_df['Original_Count'].sum()
+            file_data_points = efficiency_df['Data_Points'].sum()
+            
+            total_groups_all += file_groups
+            total_outliers_removed_all += file_outliers
+            total_original_data_all += file_original
+            total_data_points_all += file_data_points
+            
+            file_summary.append({
+                'file': selected_file,
+                'groups': file_groups,
+                'outliers_removed': file_outliers,
+                'original_data': file_original,
+                'data_points': file_data_points
+            })
+            
+            print(f"✅ File {i+1} processed: {file_groups} groups, {file_data_points} data points")
         
-        if len(valid_dates) == 0:
-            print("❌ ไม่มีข้อมูลวันที่ที่ถูกต้องในไฟล์")
-            return None
+        if not all_results:
+            return {
+                'success': False,
+                'error': 'ไม่สามารถประมวลผลไฟล์ใดๆ ได้'
+            }
         
-        # หาวันที่เริ่มต้นและสิ้นสุด
-        min_date = valid_dates['temp_date'].min()
-        max_date = valid_dates['temp_date'].max()
+        # รวมผลลัพธ์จากทุกไฟล์
+        print(f"\n📊 Combining results from {len(all_results)} files...")
+        combined_df = pd.concat(all_results, ignore_index=True)
         
-        # แสดงผลลัพธ์
-        print(f"\n📊 สรุปข้อมูลวันที่:")
-        print(f"  🗓️ วันที่เริ่มต้น: {min_date.strftime('%Y-%m-%d')} (ค.ศ.)")
-        print(f"  🗓️ วันที่สิ้นสุด: {max_date.strftime('%Y-%m-%d')} (ค.ศ.)")
-        print(f"  📈 จำนวนวัน: {(max_date - min_date).days + 1} วัน")
-        print(f"  ✅ ข้อมูลวันที่ถูกต้อง: {len(valid_dates):,} แถว")
+        # สร้างชื่อไฟล์ output
+        if not output_filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"WB_Analysis_Combined_{timestamp}"
         
-        if invalid_count > 0:
-            print(f"  ⚠️ ข้อมูลวันที่ไม่ถูกต้อง: {invalid_count:,} แถว")
+        # สร้างโฟลเดอร์ output
+        upload_dir = os.path.join(src_dir, "Upload")
+        os.makedirs(upload_dir, exist_ok=True)
         
-        # แสดงตัวอย่างข้อมูลตามช่วงเวลา
-        print(f"\n📋 การกระจายข้อมูลตามเดือน:")
-        monthly_counts = valid_dates.groupby(valid_dates['temp_date'].dt.to_period('M')).size()
-        for period, count in monthly_counts.head(10).items():
-            print(f"  📅 {period}: {count:,} แถว")
+        # เพิ่ม .xlsx ถ้ายังไม่มี
+        if not output_filename.endswith('.xlsx'):
+            output_filename += '.xlsx'
         
-        if len(monthly_counts) > 10:
-            print(f"  ... และอีก {len(monthly_counts) - 10} เดือน")
+        output_path = os.path.join(upload_dir, output_filename)
+        
+        # Export ไฟล์รวม
+        print(f"💾 Exporting combined results...")
+        
+        try:
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                # Sheet 1: ผลลัพธ์รวมทั้งหมด
+                combined_df.to_excel(writer, sheet_name='Combined_Results', index=False)
+                
+                # Sheet 2: สรุปตามรุ่นเครื่อง
+                if len(combined_df) > 0:
+                    try:
+                        model_summary = combined_df.groupby('Model').agg({
+                            'UPH': ['mean', 'std', 'count', 'min', 'max'],
+                            'Wire Per Hour': 'mean',
+                            'Wire_Per_Unit': 'mean'
+                        }).round(3)
+                        model_summary.to_excel(writer, sheet_name='Model_Summary')
+                    except Exception as model_error:
+                        print(f"⚠️ Warning: Could not create Model_Summary sheet: {model_error}")
+                
+                # Sheet 3: สรุปตามไฟล์
+                try:
+                    file_summary_df = pd.DataFrame(file_summary)
+                    file_summary_df.to_excel(writer, sheet_name='File_Summary', index=False)
+                except Exception as file_error:
+                    print(f"⚠️ Warning: Could not create File_Summary sheet: {file_error}")
+                
+                # Sheet 4: สรุปภาพรวม
+                try:
+                    overall_stats = {
+                        'Total_Files_Processed': len(all_results),
+                        'Total_Groups': total_groups_all,
+                        'Average_UPH': round(combined_df['UPH'].mean(), 3),
+                        'Average_WPH': round(combined_df['Wire Per Hour'].mean(), 2),
+                        'Total_Data_Points': total_data_points_all,
+                        'Total_Outliers_Removed': total_outliers_removed_all,
+                        'Overall_Data_Quality': round((1 - total_outliers_removed_all/total_original_data_all) * 100, 2) if total_original_data_all > 0 else 0
+                    }
+                    overall_df = pd.DataFrame.from_dict(
+                        overall_stats, orient='index', columns=['Value'])
+                    overall_df.to_excel(writer, sheet_name='Overall_Summary')
+                except Exception as overall_error:
+                    print(f"⚠️ Warning: Could not create Overall_Summary sheet: {overall_error}")
+        
+        except Exception as export_error:
+            return {
+                'success': False,
+                'error': f'ไม่สามารถส่งออกไฟล์ผลลัพธ์ได้: {str(export_error)}'
+            }
+        
+        # ตรวจสอบไฟล์ที่สร้าง
+        if not os.path.exists(output_path):
+            return {
+                'success': False,
+                'error': 'ไฟล์ผลลัพธ์ไม่ถูกสร้าง'
+            }
+        
+        # คำนวณสถิติรวม
+        avg_efficiency = combined_df['UPH'].mean() if not combined_df.empty else 0
+        
+        print(f"✅ WB_AUTO_UPH Multiple Files Analysis completed successfully!")
         
         return {
-            'min_date': min_date.strftime('%Y-%m-%d'),
-            'max_date': max_date.strftime('%Y-%m-%d'),
-            'total_days': (max_date - min_date).days + 1,
-            'valid_records': len(valid_dates),
-            'invalid_records': invalid_count,
-            'date_column': date_col,
-            'monthly_distribution': {str(period): count for period, count in monthly_counts.to_dict().items()}
+            'success': True,
+            'message': f'วิเคราะห์ข้อมูล Wire Bond จาก {len(selected_uph_files)} ไฟล์สำเร็จ',
+            'output_file': output_filename,
+            'output_path': output_path,
+            'summary': {
+                'files_processed': len(all_results),
+                'total_groups': total_groups_all,
+                'average_efficiency': round(avg_efficiency, 3),
+                'outliers_removed': total_outliers_removed_all,
+                'total_original_data': total_original_data_all,
+                'data_quality': round((1 - total_outliers_removed_all/total_original_data_all) * 100, 2) if total_original_data_all > 0 else 0,
+                'total_data_points': total_data_points_all
+            },
+            'wire_data_file': wire_data['filename'],
+            'uph_data_files': selected_uph_files,
+            'file_details': file_summary
         }
         
     except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดในการตรวจสอบวันที่: {str(e)}")
-        return None
+        print(f"❌ Error in WB_AUTO_UPH Multiple Files Analysis: {e}")
+        import traceback
+        print(f"🔍 Full traceback:")
+        print(traceback.format_exc())
+        return {
+            'success': False,
+            'error': f'เกิดข้อผิดพลาด: {str(e)}'
+        }
 
-def run(input_dir, output_dir, start_date=None, end_date=None, use_all_dates=True):
-
-    print("🚀 เริ่มต้นการประมวลผล Die Attack Auto UPH")
-    print(f"📁 Input directory: {input_dir}")
-    print(f"📁 Output directory: {output_dir}")
+def run_wb_auto_uph_web(selected_uph_file, output_filename=None):
+    """
+    รันการวิเคราะห์ WB_AUTO_UPH สำหรับเว็บ
     
-    if not use_all_dates and start_date and end_date:
-        print(f"📅 ช่วงวันที่: {start_date} ถึง {end_date}")
-    else:
-        print("📅 ใช้ข้อมูลทั้งหมด")
+    Args:
+        selected_uph_file (str): ชื่อไฟล์ UPH ที่เลือกจากเว็บ
+        output_filename (str, optional): ชื่อไฟล์ output ที่ต้องการ
+    
+    Returns:
+        dict: ผลลัพธ์การวิเคราะห์
+    """
+    try:
+        print(f"🚀 Starting WB_AUTO_UPH Web Analysis...")
+        
+        # หาไฟล์ Wire Data อัตโนมัติ
+        wire_data = get_wire_data_file()
+        if not wire_data:
+            return {
+                'success': False,
+                'error': 'ไม่พบไฟล์ Wire Data ในโฟลเดอร์ data_wireWB'
+            }
+        
+        # หา path ของไฟล์ UPH ที่เลือก
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.dirname(current_dir)
+        uph_path = os.path.join(src_dir, "data_WB", selected_uph_file)
+        
+        if not os.path.exists(uph_path):
+            return {
+                'success': False,
+                'error': f'ไม่พบไฟล์ UPH: {selected_uph_file}'
+            }
+        
+        print(f"📁 Files to process:")
+        print(f"   Wire Data: {wire_data['filename']}")
+        print(f"   UPH Data: {selected_uph_file}")
+        
+        # สร้าง analyzer
+        analyzer = WireBondingAnalyzer()
+        
+        # โหลดข้อมูล
+        print(f"📊 Loading data...")
+        if not analyzer.load_data(uph_path, wire_data['filepath']):
+            return {
+                'success': False,
+                'error': 'ไม่สามารถโหลดข้อมูลได้'
+            }
+        
+        # คำนวณประสิทธิภาพ
+        print(f"⚡ Calculating efficiency...")
+        efficiency_df = analyzer.calculate_efficiency()
+        
+        if efficiency_df is None or efficiency_df.empty:
+            return {
+                'success': False,
+                'error': 'ไม่สามารถคำนวณประสิทธิภาพได้ หรือไม่มีข้อมูลหลังจากประมวลผล'
+            }
+        
+        # สร้างชื่อไฟล์ output
+        if not output_filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"WB_Analysis_{timestamp}"
+        
+        # สร้างโฟลเดอร์ output
+        upload_dir = os.path.join(src_dir, "Upload")
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # เพิ่ม .xlsx ถ้ายังไม่มี
+        if not output_filename.endswith('.xlsx'):
+            output_filename += '.xlsx'
+        
+        output_path = os.path.join(upload_dir, output_filename)
+        
+        # Export ไฟล์
+        print(f"💾 Exporting results...")
+        if not analyzer.export_to_excel(output_path):
+            return {
+                'success': False,
+                'error': 'ไม่สามารถส่งออกไฟล์ผลลัพธ์ได้'
+            }
+        
+        # ตรวจสอบไฟล์ที่สร้าง
+        if not os.path.exists(output_path):
+            return {
+                'success': False,
+                'error': 'ไฟล์ผลลัพธ์ไม่ถูกสร้าง'
+            }
+        
+        # สรุปผลลัพธ์
+        total_groups = len(efficiency_df)
+        avg_efficiency = efficiency_df['UPH'].mean() if not efficiency_df.empty else 0
+        total_data_points = efficiency_df['Data_Points'].sum()
+        total_outliers_removed = efficiency_df['Outliers_Removed'].sum()
+        total_original_data = efficiency_df['Original_Count'].sum()
+        
+        print(f"✅ WB_AUTO_UPH Web Analysis completed successfully!")
+        
+        return {
+            'success': True,
+            'message': 'วิเคราะห์ข้อมูล Wire Bond สำเร็จ',
+            'output_file': output_filename,
+            'output_path': output_path,
+            'summary': {
+                'total_groups': total_groups,
+                'average_efficiency': round(avg_efficiency, 3),
+                'outliers_removed': total_outliers_removed,
+                'total_original_data': total_original_data,
+                'data_quality': round((1 - total_outliers_removed/total_original_data) * 100, 2) if total_original_data > 0 else 0,
+                'total_data_points': total_data_points
+            },
+            'wire_data_file': wire_data['filename'],
+            'uph_data_file': selected_uph_file
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in WB_AUTO_UPH Web Analysis: {e}")
+        import traceback
+        print(f"🔍 Full traceback:")
+        print(traceback.format_exc())
+        return {
+            'success': False,
+            'error': f'เกิดข้อผิดพลาด: {str(e)}'
+        }
+        
+def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
+    print(f"🚀 Starting WB_AUTO_UPH execution...")
+    
+    analyzer = WireBondingAnalyzer()
+    
+    # Debug: แสดงข้อมูล input
+    print(f"🔍 WB_AUTO_UPH Debug Info:")
+    print(f"   Input Dir: {input_dir}")
+    print(f"   Output Dir: {output_dir}")
+    print(f"   UPH Filename: {uph_filename}")
+    print(f"   Wire Filename: {wire_filename}")
+    print(f"   Input Dir exists: {os.path.exists(input_dir)}")
     
     try:
-        # ตรวจสอบว่าโฟลเดอร์ input มีอยู่จริง
-        if not os.path.exists(input_dir):
-            raise Exception(f"ไม่พบโฟลเดอร์ input: {input_dir}")
-        
-        # ค้นหาไฟล์ Excel ในโฟลเดอร์ input
-        excel_files = []
-        for file in os.listdir(input_dir):
-            if file.lower().endswith(('.xlsx', '.xls')):
-                excel_files.append(os.path.join(input_dir, file))
-        
-        if not excel_files:
-            raise Exception("ไม่พบไฟล์ Excel ในโฟลเดอร์ input")
-        
-        # ใช้ไฟล์แรกที่พบ
-        input_file = excel_files[0]
-        print(f"📄 ใช้ไฟล์: {os.path.basename(input_file)}")
-        
-        # แสดงข้อมูลช่วงวันที่ในไฟล์ก่อนประมวลผล
-        print(f"\n" + "="*50)
-        print("🔍 การตรวจสอบข้อมูลวันที่ในไฟล์")
-        print("="*50)
-        
-        date_info = preview_date_range(input_file)
-        
-        if date_info:
-            print(f"\n💡 คำแนะนำ:")
-            print(f"  • หากต้องการประมวลผลข้อมูลทั้งหมด ให้เลือก 'ใช้ข้อมูลทั้งหมด'")
-            print(f"  • หากต้องการเลือกช่วงวันที่ ให้กำหนดวันที่ระหว่าง {date_info['min_date']} ถึง {date_info['max_date']}")
-        
-        print(f"\n" + "="*50)
-        print("🚀 เริ่มการประมวลผลข้อมูล")
-        print("="*50)
-        
-        # ประมวลผลข้อมูลตามการตั้งค่าวันที่
-        if use_all_dates:
-            df_cleaned, grouped_average, actual_start_date, actual_end_date = process_die_attack_data(input_file)
+        if os.path.exists(input_dir):
+            files_in_input = os.listdir(input_dir)
+            print(f"   Files in input_dir: {files_in_input}")
         else:
-            df_cleaned, grouped_average, actual_start_date, actual_end_date = process_die_attack_data_with_date_range(
-                input_file, start_date, end_date
-            )
+            raise Exception(f"Input directory does not exist: {input_dir}")
         
-        # บันทึกผลลัพธ์
-        cleaned_file, average_file = save_results(
-            df_cleaned, grouped_average, actual_start_date, actual_end_date, output_dir
-        )
+        # ใช้ input_dir ที่ส่งมาจากระบบเว็บ (temporary directory)
+        if uph_filename and wire_filename:
+            uph_file = os.path.join(input_dir, uph_filename)
+            wire_file = os.path.join(input_dir, wire_filename)
+            print(f"   UPH File Path: {uph_file}")
+            print(f"   Wire File Path: {wire_file}")
+        else:
+            uph_file = None
+            wire_file = None
+            
+            # หาไฟล์ในโฟลเดอร์ input_dir แบบอัตโนมัติ
+            for fname in files_in_input:
+                print(f"   Checking file: {fname}")
+                fname_lower = fname.lower()
+                
+                # ตรวจสอบไฟล์ UPH (WB, UTL, UPH, Data)
+                if (('wb' in fname_lower or 'utl' in fname_lower or 'uph' in fname_lower or 'data' in fname_lower) 
+                    and fname_lower.endswith(('.xlsx', '.xls', '.csv')) 
+                    and 'wire' not in fname_lower and 'book' not in fname_lower):
+                    uph_file = os.path.join(input_dir, fname)
+                    print(f"   ✅ Found UPH file: {uph_file}")
+                
+                # ตรวจสอบไฟล์ Wire (Wire, Book)
+                elif (('wire' in fname_lower or 'book' in fname_lower) 
+                      and fname_lower.endswith(('.xlsx', '.xls'))):
+                    wire_file = os.path.join(input_dir, fname)
+                    print(f"   ✅ Found Wire file: {wire_file}")
+            
+            # ถ้าหาไม่เจอแบบอัตโนมัติ ให้ใช้ไฟล์แรกที่เจอ
+            if not uph_file or not wire_file:
+                files_in_dir = [f for f in files_in_input if f.endswith(('.xlsx', '.xls', '.csv'))]
+                print(f"   Available files: {files_in_dir}")
+                
+                if len(files_in_dir) >= 2:
+                    # เอาไฟล์ที่มีขนาดใหญ่กว่าเป็น UPH file
+                    files_with_size = []
+                    for f in files_in_dir:
+                        file_path = os.path.join(input_dir, f)
+                        try:
+                            size = os.path.getsize(file_path)
+                            files_with_size.append((f, size))
+                        except:
+                            files_with_size.append((f, 0))
+                    
+                    # เรียงตามขนาดไฟล์
+                    files_with_size.sort(key=lambda x: x[1], reverse=True)
+                    
+                    if not uph_file:
+                        uph_file = os.path.join(input_dir, files_with_size[0][0])
+                        print(f"   📊 Auto-selected UPH file (largest): {files_with_size[0][0]}")
+                    
+                    if not wire_file:
+                        # หาไฟล์ที่ไม่ใช่ UPH file
+                        for fname, size in files_with_size:
+                            if fname != os.path.basename(uph_file):
+                                wire_file = os.path.join(input_dir, fname)
+                                print(f"   📊 Auto-selected Wire file: {fname}")
+                                break
         
-        # สร้างรายงานสรุป
-        summary = {
-            'input_file': os.path.basename(input_file),
-            'cleaned_file': os.path.basename(cleaned_file),
-            'average_file': os.path.basename(average_file),
-            'total_records': len(df_cleaned),
-            'groups_count': len(grouped_average),
-            'date_range': f"{actual_start_date} ถึง {actual_end_date}",
-            'use_all_dates': use_all_dates,
-            'processing_date_range': {
-                'start': actual_start_date,
-                'end': actual_end_date,
-                'user_defined': not use_all_dates
-            },
-            'file_date_info': date_info,  # รวมข้อมูลวันที่ของไฟล์
-            'status': 'success'
-        }
+        # ตรวจสอบว่าพบไฟล์ครบหรือไม่
+        if not uph_file or not wire_file:
+            missing_files = []
+            if not uph_file:
+                missing_files.append("UPH data file")
+            if not wire_file:
+                missing_files.append("Wire data file")
+            
+            available_files = [f for f in files_in_input if f.endswith(('.xlsx', '.xls', '.csv'))]
+            error_msg = f"ไม่พบไฟล์ที่จำเป็น: {', '.join(missing_files)}\nไฟล์ที่มีในโฟลเดอร์: {', '.join(available_files)}\nกรุณาตรวจสอบให้แน่ใจว่าอัปโหลดไฟล์ครบ 2 ไฟล์ (.xlsx หรือ .xls)"
+            print(f"❌ {error_msg}")
+            raise Exception(error_msg)
         
-        print(f"\n✅ ประมวลผลเสร็จสิ้น!")
-        print(f"📊 ไฟล์ข้อมูลที่ตัด outliers: {os.path.basename(cleaned_file)}")
-        print(f"📈 ไฟล์ค่าเฉลี่ยตามกลุ่ม: {os.path.basename(average_file)}")
-        print(f"📋 จำนวนข้อมูลทั้งหมด: {len(df_cleaned):,} แถว")
-        print(f"📊 จำนวนกลุ่ม: {len(grouped_average)} กลุ่ม")
+        # ตรวจสอบว่าไฟล์มีอยู่จริง
+        if not os.path.exists(uph_file):
+            raise Exception(f"ไม่พบไฟล์ UPH: {uph_file}")
+        if not os.path.exists(wire_file):
+            raise Exception(f"ไม่พบไฟล์ Wire Data: {wire_file}")
         
-        return summary
+        print(f"✅ Files validated successfully")
+        
+        # โหลดข้อมูล
+        print(f"📁 Loading data...")
+        if not analyzer.load_data(uph_file, wire_file):
+            raise Exception("โหลดข้อมูลไม่สำเร็จ")
+        
+        print(f"📊 Data loaded successfully")
+        
+        # คำนวณประสิทธิภาพ
+        print(f"⚡ Calculating efficiency...")
+        efficiency_df = analyzer.calculate_efficiency()
+        if efficiency_df is None or efficiency_df.empty:
+            raise Exception("คำนวณประสิทธิภาพไม่สำเร็จ หรือไม่มีข้อมูลหลังจากประมวลผล")
+        
+        print(f"✅ Efficiency calculation completed")
+        
+        # สร้างโฟลเดอร์ output
+        print(f"📁 Creating output directory...")
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, "WB_AUTO_UPH_RESULT.xlsx")
+        
+        print(f"📄 Output path: {output_path}")
+        
+        # ส่งออกไฟล์
+        print(f"💾 Exporting to Excel...")
+        if not analyzer.export_to_excel(output_path):
+            raise Exception("ส่งออกไฟล์ผลลัพธ์ไม่สำเร็จ - กรุณาตรวจสอบสิทธิ์การเขียนไฟล์หรือพื้นที่ดิสก์")
+        
+        # ตรวจสอบไฟล์ผลลัพธ์
+        if not os.path.exists(output_path):
+            raise Exception(f"ไฟล์ผลลัพธ์ไม่ถูกสร้าง: {output_path}")
+        
+        file_size = os.path.getsize(output_path)
+        if file_size == 0:
+            raise Exception(f"ไฟล์ผลลัพธ์ว่างเปล่า: {output_path}")
+        
+        print(f"✅ WB_AUTO_UPH completed successfully!")
+        print(f"📄 Output file: {output_path} (size: {file_size} bytes)")
+        return output_path
         
     except Exception as e:
-        error_msg = f"❌ เกิดข้อผิดพลาด: {str(e)}"
-        print(error_msg)
-        
-        # สร้างรายงานข้อผิดพลาด
-        error_summary = {
-            'status': 'error',
-            'error_message': str(e),
-            'input_dir': input_dir,
-            'output_dir': output_dir
-        }
-        
-        return error_summary
+        print(f"❌ WB_AUTO_UPH failed: {str(e)}")
+        import traceback
+        print(f"🔍 Full traceback:")
+        print(traceback.format_exc())
+        raise e
 
+def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
+    """
+    WB_AUTO_UPH function สำหรับเรียกใช้ผ่าน workflow ปกติ
+    รองรับการรับไฟล์จากโฟลเดอร์ data_WB และ data_wireWB
+    """
+    try:
+        print(f"🚀 Starting WB_AUTO_UPH workflow...")
+        print(f"📁 Input: {input_path}")
+        print(f"📁 Output: {output_dir}")
+        
+        # เรียกใช้ function หลัก
+        result_path = run(input_path, output_dir)
+        return result_path
+        
+    except Exception as e:
+        print(f"❌ WB_AUTO_UPH workflow failed: {str(e)}")
+        raise e

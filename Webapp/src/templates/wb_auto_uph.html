@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wire Bond Auto UPH Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+
+        .main-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .content-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .section-card {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(108, 117, 125, 0.2);
+        }
+
+        .file-item {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .file-item:hover {
+            border-color: #007bff;
+            background: rgba(0, 123, 255, 0.05);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.2);
+        }
+
+        .file-item.selected {
+            border-color: #007bff;
+            background: rgba(0, 123, 255, 0.1);
+        }
+
+        .file-checkbox {
+            margin-right: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 30px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 30px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+            font-size: 16px;
+        }
+
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+
+        .section-title {
+            color: #495057;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .file-info {
+            font-size: 13px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .selection-counter {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+
+        .logo {
+            max-height: 80px;
+            margin-bottom: 20px;
+        }
+
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="header-card">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
+            <h1 class="mb-3">
+                <i class="fas fa-microchip text-primary me-2"></i>
+                Wire Bond Auto UPH Analysis
+            </h1>
+            <p class="text-muted mb-0">วิเคราะห์ประสิทธิภาพการทำงานของเครื่อง Wire Bond โดยอัตโนมัติ</p>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'primary' if category == 'info' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Main Content -->
+        <div class="content-card">
+            <form method="POST" id="wb-form">
+                <!-- Wire Data Status -->
+                <div class="section-card">
+                    <h4 class="section-title">
+                        <i class="fas fa-database text-info"></i>
+                        ข้อมูล Wire Data
+                    </h4>
+                    {% if wire_data %}
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="status-badge status-success">
+                                <i class="fas fa-check-circle me-1"></i>พร้อมใช้งาน
+                            </span>
+                            <div>
+                                <strong>{{ wire_data.filename }}</strong>
+                                <div class="file-info">
+                                    <i class="fas fa-folder me-1"></i>data_wireWB
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="status-badge status-error">
+                                <i class="fas fa-exclamation-triangle me-1"></i>ไม่พบไฟล์
+                            </span>
+                            <div class="text-danger">
+                                ไม่พบไฟล์ Wire Data ในโฟลเดอร์ data_wireWB
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- UPH Files Selection -->
+                <div class="section-card">
+                    <h4 class="section-title">
+                        <i class="fas fa-chart-line text-success"></i>
+                        เลือกไฟล์ UPH Data
+                    </h4>
+                    
+                    <div class="selection-counter" id="selection-counter" style="display: none;">
+                        <i class="fas fa-check-double me-1"></i>
+                        เลือกแล้ว: <span id="selected-count">0</span> ไฟล์
+                    </div>
+
+                    {% if uph_files %}
+                        <div id="uph-files-container">
+                            {% for file in uph_files %}
+                                <div class="file-item" onclick="toggleSelection(this, '{{ file.filename }}')">
+                                    <input type="checkbox" 
+                                           name="selected_uph_files" 
+                                           value="{{ file.filename }}" 
+                                           class="file-checkbox"
+                                           id="file-{{ loop.index }}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ file.filename }}</strong>
+                                            <div class="file-info">
+                                                <i class="fas fa-hdd me-1"></i>
+                                                {{ "%.2f"|format(file.size / 1024 / 1024) }} MB
+                                                <i class="fas fa-folder ms-3 me-1"></i>
+                                                data_WB
+                                            </div>
+                                        </div>
+                                        <i class="fas fa-plus-circle text-primary" style="font-size: 20px;"></i>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Select All Controls -->
+                        <div class="mt-3 text-center">
+                            <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="selectAll()">
+                                <i class="fas fa-check-double me-1"></i>เลือกทั้งหมด
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearAll()">
+                                <i class="fas fa-times me-1"></i>ล้างการเลือก
+                            </button>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-folder-open fa-3x mb-3"></i>
+                            <h5>ไม่พบไฟล์ UPH Data</h5>
+                            <p>ไม่พบไฟล์ UPH ในโฟลเดอร์ data_WB</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Output Settings -->
+                <div class="section-card">
+                    <h4 class="section-title">
+                        <i class="fas fa-cog text-warning"></i>
+                        ตั้งค่าผลลัพธ์
+                    </h4>
+                    <div class="mb-3">
+                        <label for="output_filename" class="form-label">
+                            <i class="fas fa-file-excel me-1"></i>
+                            ชื่อไฟล์ผลลัพธ์ (ไม่ระบุ = ใช้ชื่ออัตโนมัติ)
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="output_filename" 
+                               name="output_filename" 
+                               placeholder="เช่น WB_Analysis_2025"
+                               maxlength="100">
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            ไฟล์จะถูกบันทึกเป็น .xlsx อัตโนมัติ
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="text-center mt-4">
+                    {% if uph_files and wire_data %}
+                        <button type="submit" class="btn btn-primary btn-lg me-3" id="analyze-btn" disabled>
+                            <i class="fas fa-play me-2"></i>
+                            เริ่มการวิเคราะห์
+                        </button>
+                    {% endif %}
+                    <a href="{{ url_for('operation') }}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        กลับ
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedFiles = new Set();
+
+        function toggleSelection(element, filename) {
+            const checkbox = element.querySelector('input[type="checkbox"]');
+            const icon = element.querySelector('.fa-plus-circle, .fa-check-circle');
+            
+            checkbox.checked = !checkbox.checked;
+            
+            if (checkbox.checked) {
+                selectedFiles.add(filename);
+                element.classList.add('selected');
+                icon.className = 'fas fa-check-circle text-success';
+            } else {
+                selectedFiles.delete(filename);
+                element.classList.remove('selected');
+                icon.className = 'fas fa-plus-circle text-primary';
+            }
+            
+            updateUI();
+        }
+
+        function selectAll() {
+            const checkboxes = document.querySelectorAll('input[name="selected_uph_files"]');
+            const fileItems = document.querySelectorAll('.file-item');
+            
+            checkboxes.forEach((checkbox, index) => {
+                if (!checkbox.checked) {
+                    checkbox.checked = true;
+                    selectedFiles.add(checkbox.value);
+                    fileItems[index].classList.add('selected');
+                    const icon = fileItems[index].querySelector('.fa-plus-circle, .fa-check-circle');
+                    icon.className = 'fas fa-check-circle text-success';
+                }
+            });
+            
+            updateUI();
+        }
+
+        function clearAll() {
+            const checkboxes = document.querySelectorAll('input[name="selected_uph_files"]');
+            const fileItems = document.querySelectorAll('.file-item');
+            
+            checkboxes.forEach((checkbox, index) => {
+                checkbox.checked = false;
+                fileItems[index].classList.remove('selected');
+                const icon = fileItems[index].querySelector('.fa-plus-circle, .fa-check-circle');
+                icon.className = 'fas fa-plus-circle text-primary';
+            });
+            
+            selectedFiles.clear();
+            updateUI();
+        }
+
+        function updateUI() {
+            const counter = document.getElementById('selection-counter');
+            const countElement = document.getElementById('selected-count');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            
+            if (selectedFiles.size > 0) {
+                counter.style.display = 'inline-block';
+                countElement.textContent = selectedFiles.size;
+                if (analyzeBtn) analyzeBtn.disabled = false;
+            } else {
+                counter.style.display = 'none';
+                if (analyzeBtn) analyzeBtn.disabled = true;
+            }
+        }
+
+        // Form submission handler
+        document.getElementById('wb-form').addEventListener('submit', function(e) {
+            if (selectedFiles.size === 0) {
+                e.preventDefault();
+                alert('กรุณาเลือกไฟล์ UPH อย่างน้อย 1 ไฟล์');
+                return false;
+            }
+            
+            const analyzeBtn = document.getElementById('analyze-btn');
+            if (analyzeBtn) {
+                analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>กำลังประมวลผล...';
+                analyzeBtn.disabled = true;
+            }
+        });
+
+        // Initialize UI
+        updateUI();
+    </script>
+</body>
+</html>

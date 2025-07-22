@@ -1,292 +1,771 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เลือกวิธีประมวลผล</title>
+    <title>เลือกวิธีประมวลผล - {{ operation }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Sarabun', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             margin: 0;
+            padding: 0;
+        }
+        
+        .main-container {
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        
+        .logo-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .logo-container img {
+            width: 60px;
+            height: auto;
+            opacity: 0.9;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+        
+        .header-section {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
             padding: 20px;
-            background-color: #fff;
-            background-image: url('/static/logo.png');
-            background-size: 10%; /* ปรับขนาดรูปให้พอดีกับหน้าจอ */
-            background-position: right 40px top 40px; /* เว้นขอบขวาและบน 40px */
-            background-repeat: no-repeat; /* ไม่ให้รูปซ้ำ */
-            background-attachment: fixed; /* ทำให้รูปไม่เลื่อนตามการ scroll */
         }
-        h2 {
-            color: #333;
-            margin: 50px;
-            text-align: center;
-            font-size: 55px;
-            text-shadow: black 1px 1px 1px
+        
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
-        h3 {
-            color: #333;
-            margin-top: 10px;
-            text-align: center;
-            font-size: 40px;
-            text-shadow: black 1px 1px 1px
+        
+        .operation-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
         }
-        .method-form {
-            max-width: 800px;
-            margin: 40px auto 0 auto;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 5px 5px 12px rgba(0,0,0,0.5);
-            padding: 50px 40px 30px 40px;
+        
+        .method-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
         }
-        .method-radio-group {
-            display: flex;
-            flex-direction: column;
-            gap: 1.2rem;
-            margin-bottom: 2rem;
-        }
-        .method-radio {
-            display: flex;
-            align-items: flex-start;
-            gap: 1rem;
-        }
-        .method-radio input[type="radio"] {
-            margin-top: 4px;
-            accent-color: #1976d2;
-            width: 1.2em;
-            height: 1.2em;
-        }
-        .method-radio label {
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            gap: 0.2rem;
-        }
+        
         .method-title {
-            font-size: 1.1rem;
+            text-align: center;
+            color: #2c3e50;
+            font-size: 1.8rem;
             font-weight: 600;
-            color: #1976d2;
+            margin-bottom: 30px;
+            position: relative;
         }
-        .method-desc {
-            font-size: 0.97rem;
-            color: #555;
-            opacity: 0.85;
+        
+        .method-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 3px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border-radius: 2px;
         }
-        .btn-method-next {
-            width: 100%;
-            padding: 0.9rem 0;
-            background: #1976d2;
-            color: #fff;
-            border: none;
-            border-radius: 0.375rem;
-            font-size: 1.1rem;
-            font-weight: 600;
+        
+        .method-options {
+            margin-bottom: 30px;
+        }
+        
+        .method-option {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
             cursor: pointer;
-            margin-top: 0.5rem;
-            transition: background 0.2s;
+            position: relative;
+            overflow: hidden;
         }
-        .btn-method-next:hover {
-            background: #1251a2;
+        
+        .method-option::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transition: left 0.5s ease;
         }
+        
+        .method-option:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+        }
+        
+        .method-option:hover::before {
+            left: 100%;
+        }
+        
+        .method-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(45deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+        }
+        
+        .method-radio {
+            display: none;
+        }
+        
+        .method-label {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            cursor: pointer;
+        }
+        
+        .method-icon {
+            font-size: 2rem;
+            margin-right: 20px;
+            width: 60px;
+            text-align: center;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .method-content {
+            flex: 1;
+        }
+        
+        .method-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .method-description {
+            color: #7f8c8d;
+            font-size: 0.95rem;
+            margin: 0;
+        }
+        
+        .input-sections {
+            margin-top: 30px;
+        }
+        
         .input-section {
-            margin-bottom: 1.2rem;
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 1rem 1.2rem;
-            box-shadow: 0 1px 4px rgba(25,118,210,0.04);
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            display: none;
         }
-        .form-label {
+        
+        .input-section.active {
             display: block;
-            margin-bottom: 0.3rem;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-label {
             font-weight: 600;
             color: #495057;
-        }
-        .form-control {
+            margin-bottom: 10px;
             display: block;
-            width: 100%;
-            padding: 0.6rem;
+        }
+        
+        .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 12px 15px;
             font-size: 1rem;
-            color: #495057;
-            background-color: #fff;
-            border: 1px solid #ced4da;
-            border-radius: 0.375rem;
-            margin-bottom: 0.7rem;
+            transition: all 0.3s ease;
+            width: 100%;
         }
-        .form-label-optional {
-            font-weight: normal;
-            color: #888;
-            font-size: 0.95em;
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            outline: none;
         }
+        
+        .folder-files-container {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .file-checkbox-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .file-checkbox-item:hover {
+            background: #e9ecef;
+        }
+        
+        .file-checkbox-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn-file-action {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+        
+        .btn-file-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            color: white;
+        }
+        
+        .btn-method-next {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 15px 40px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 30px;
+        }
+        
+        .btn-method-next:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-method-next:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-back {
+            background: #6c757d;
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+            width: 100%;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-back:hover {
+            background: #5a6268;
+            color: white;
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+        
+        .alert {
+            border-radius: 15px;
+            border: none;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .method-card {
+                margin: 10px;
+                padding: 25px;
+            }
+            
+            .page-title {
+                font-size: 2rem;
+            }
+            
+            .method-icon {
+                font-size: 1.5rem;
+                margin-right: 15px;
+                width: 40px;
+            }
+            
+            .method-name {
+                font-size: 1.1rem;
+            }
+        }
+        
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .method-option {
+            animation: fadeInUp 0.5s ease forwards;
+            opacity: 0;
+        }
+        
+        .method-option:nth-child(1) { animation-delay: 0.1s; }
+        .method-option:nth-child(2) { animation-delay: 0.2s; }
+        .method-option:nth-child(3) { animation-delay: 0.3s; }
     </style>
 </head>
 <body>
-    <h2>Operation: {{ operation }}</h2>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul style="color: red; margin-bottom: 18px;">
-          {% for category, message in messages %}
-            <li>{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
-    <h3>Method</h3>
-    <form method="post" action="{{ url_for('method') }}" enctype="multipart/form-data" class="method-form">
-        <div class="method-radio-group">
-            <div class="method-radio">
-                <input type="radio" id="upload" name="inputMethod" value="upload" checked>
-                <label for="upload">
-                    <span class="method-title">อัปโหลดไฟล์</span>
-                    <span class="method-desc">เลือกไฟล์จากคอมพิวเตอร์</span>
-                </label>
-            </div>
-            <div class="method-radio">
-                <input type="radio" id="folder" name="inputMethod" value="folder">
-                <label for="folder">
-                    <span class="method-title">เลือกจากโฟลเดอร์</span>
-                    <span class="method-desc">เลือกไฟล์จากโฟลเดอร์ที่มีในระบบ</span>
-                </label>
-            </div>
-            <div class="method-radio">
-                <input type="radio" id="api" name="inputMethod" value="api">
-                <label for="api">
-                    <span class="method-title">API (ไฟล์ที่มีอยู่ในระบบ)</span>
-                    <span class="method-desc">ดึงไฟล์จาก API ภายนอก</span>
-                </label>
+    <div class="main-container">
+        <!-- Logo -->
+        <div class="logo-container">
+            <img src="/static/logo.png" alt="Company Logo">
+        </div>
+        
+        <!-- Header -->
+        <div class="header-section">
+            <h1 class="page-title">
+                <i class="fas fa-cogs me-3"></i>
+                เลือกวิธีประมวลผล
+            </h1>
+            <div class="operation-badge">
+                <i class="fas fa-tag me-2"></i>{{ operation }}
             </div>
         </div>
-
-        <!-- Section: อัปโหลดไฟล์ -->
-        <div id="uploadSection" class="input-section">
-            <label for="fileInput" class="form-label">เลือกไฟล์</label>
-            <input type="file" id="fileInput" name="file" class="form-control" multiple>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="container">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'info' }}">
+                            <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }} me-2"></i>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Method Selection -->
+        <div class="container">
+            <div class="method-card">
+                <h2 class="method-title">เลือกรูปแบบการป้อนข้อมูล</h2>
+                
+                <form action="/method" method="post" class="method-form" enctype="multipart/form-data">
+                    <input type="hidden" name="operation" value="{{ operation }}">
+                    
+                    <!-- Method Options -->
+                    <div class="method-options">
+                        <div class="method-option" data-method="upload">
+                            <label class="method-label" for="upload">
+                                <div class="method-icon">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                </div>
+                                <div class="method-content">
+                                    <div class="method-name">อัปโหลดไฟล์</div>
+                                    <p class="method-description">อัปโหลดไฟล์ข้อมูลจากเครื่องคอมพิวเตอร์ของคุณ (รองรับหลายไฟล์)</p>
+                                </div>
+                            </label>
+                            <input type="radio" name="inputMethod" value="upload" id="upload" class="method-radio" checked>
+                        </div>
+                        
+                        <div class="method-option" data-method="folder">
+                            <label class="method-label" for="folder">
+                                <div class="method-icon">
+                                    <i class="fas fa-folder-open"></i>
+                                </div>
+                                <div class="method-content">
+                                    <div class="method-name">เลือกจากโฟลเดอร์</div>
+                                    <p class="method-description">เลือกไฟล์จากโฟลเดอร์ข้อมูลที่มีอยู่ในระบบ</p>
+                                </div>
+                            </label>
+                            <input type="radio" name="inputMethod" value="folder" id="folder" class="method-radio">
+                        </div>
+                        
+                        <div class="method-option" data-method="api">
+                            <label class="method-label" for="api">
+                                <div class="method-icon">
+                                    <i class="fas fa-database"></i>
+                                </div>
+                                <div class="method-content">
+                                    <div class="method-name">ดึงจาก API</div>
+                                    <p class="method-description">ดึงข้อมูลจากระบบ API ภายนอก</p>
+                                </div>
+                            </label>
+                            <input type="radio" name="inputMethod" value="api" id="api" class="method-radio">
+                        </div>
+                    </div>
+                    
+                    <!-- Input Sections -->
+                    <div class="input-sections">
+                        <!-- Upload Section -->
+                        <div id="uploadSection" class="input-section active">
+                            <label for="fileInput" class="form-label">
+                                <i class="fas fa-file-upload me-2"></i>เลือกไฟล์
+                            </label>
+                            <input type="file" id="fileInput" name="file" class="form-control" multiple accept=".xlsx,.xls,.csv">
+                            <small class="text-muted mt-2 d-block">
+                                <i class="fas fa-info-circle me-1"></i>
+                                รองรับไฟล์ .xlsx, .xls, .csv และสามารถเลือกหลายไฟล์พร้อมกันได้
+                            </small>
+                        </div>
+                        
+                        <!-- Folder Section -->
+                        <div id="folderSection" class="input-section">
+                            <label for="folderDropdown" class="form-label">
+                                <i class="fas fa-folder-open me-2"></i>เลือกโฟลเดอร์ข้อมูล
+                            </label>
+                            <select id="folderDropdown" name="selected_folder" class="form-control">
+                                <option value="">-- กรุณาเลือกโฟลเดอร์ข้อมูล --</option>
+                                {% if data_folders %}
+                                    {% for folder in data_folders %}
+                                        <option value="{{ folder.path }}">
+                                            📁 {{ folder.name }} ({{ folder.file_count }} ไฟล์)
+                                        </option>
+                                    {% endfor %}
+                                {% else %}
+                                    <option value="" disabled>ไม่พบโฟลเดอร์ข้อมูล</option>
+                                {% endif %}
+                            </select>
+                            {% if data_folders %}
+                                <small class="text-muted mt-2 d-block">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    โฟลเดอร์ข้อมูลที่พบ: 
+                                    {% for folder in data_folders %}
+                                        <strong>{{ folder.name }}</strong>{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                </small>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- API Section -->
+                        <div id="apiSection" class="input-section">
+                            <label for="endpoint" class="form-label">
+                                <i class="fas fa-link me-2"></i>API Endpoint
+                            </label>
+                            <select id="endpoint" name="endpoint" class="form-control">
+                                <option value="data">AutoUPH_Get (data)</option>
+                            </select>
+                            
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <label for="plant" class="form-label">Plant</label>
+                                    <input type="text" id="plant" name="plant" class="form-control" placeholder="เช่น APL">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="year_quarter" class="form-label">Year Quarter</label>
+                                    <input type="text" id="year_quarter" name="year_quarter" class="form-control" placeholder="เช่น 2024Q1">
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <label for="api_operation" class="form-label">Operation</label>
+                                    <input type="text" id="api_operation" name="api_operation" class="form-control" placeholder="เช่น Wire Bond">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="bom_no" class="form-label">BOM No <span class="text-muted">(ไม่บังคับ)</span></label>
+                                    <input type="text" id="bom_no" name="bom_no" class="form-control" placeholder="เช่น BOM001">
+                                </div>
+                            </div>
+                            
+                            <button type="button" id="testApiBtn" class="btn-file-action mt-3">
+                                <i class="fas fa-test me-2"></i>ทดสอบ API
+                            </button>
+                            
+                            <div id="apiResult" class="mt-3" style="display: none;">
+                                <label class="form-label">ผลลัพธ์การทดสอบ:</label>
+                                <pre id="apiResultContent" style="background:#2c3e50; color:#ecf0f1; padding:15px; border-radius:10px; max-height:200px; overflow-y:auto; font-size:0.9rem;"></pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn-method-next">
+                        <i class="fas fa-arrow-right me-2"></i>ดำเนินการต่อ
+                    </button>
+                    
+                    <a href="/" class="btn-back">
+                        <i class="fas fa-arrow-left me-2"></i>กลับหน้าหลัก
+                    </a>
+                </form>
+            </div>
         </div>
+    </div>
 
-        <!-- Section: เลือกโฟลเดอร์ -->
-        <div id="folderSection" class="input-section" style="display:none;">
-            <label for="folderDropdown" class="form-label">เลือกโฟลเดอร์</label>
-            <select id="folderDropdown" name="selected_folder" class="form-control">
-                <option value="">-- กรุณาเลือกโฟลเดอร์ --</option>
-                <option value="folder1">โฟลเดอร์ 1</option>
-                <option value="folder2">โฟลเดอร์ 2</option>
-                <option value="folder3">โฟลเดอร์ 3</option>
-            </select>
-        </div>
-
-        <!-- Section: API -->
-        <div id="apiInputSection" class="input-section" style="display:none;">
-            <label for="endpoint" class="form-label">API Endpoint</label>
-            <select id="endpoint" name="endpoint" class="form-control" required>
-                <option value="data">AutoUPH_Get (data)</option>
-                <!-- เพิ่ม endpoint อื่นๆ ตามต้องการ -->
-            </select>
-
-            <label for="plant" class="form-label">Plant</label>
-            <input type="text" id="plant" name="plant" class="form-control" required>
-
-            <label for="year_quarter" class="form-label">Year Quarter</label>
-            <input type="text" id="year_quarter" name="year_quarter" class="form-control" required>
-
-            <label for="api_operation" class="form-label">Operation</label>
-            <input type="text" id="api_operation" name="api_operation" class="form-control" required>
-
-            <label for="bom_no" class="form-label">BOM No <span class="form-label-optional">(ไม่กรอกก็ได้)</span></label>
-            <input type="text" id="bom_no" name="bom_no" class="form-control">
-
-            <button type="button" id="testApiBtn" class="btn-method-next" style="background:#28a745; margin-bottom:10px;">
-                ทดสอบดึง API
-            </button>
-            <pre id="apiResult" style="background:#222; color:#fff; padding:1em; border-radius:8px; min-height:80px;"></pre>
-        </div>
-
-        <input type="hidden" name="operation" value="{{ operation }}">
-        <button type="submit" class="btn-method-next">ถัดไป</button>
-        <a href="{{ url_for('operation') }}" class="btn-method-next" style="background:#888; margin-top:10px; display:block; text-align:center; text-decoration:none;">
-            ย้อนกลับ
-        </a>
-    </form>
-
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-
-    document.addEventListener('DOMContentLoaded', function() {
-        const uploadRadio = document.getElementById('upload');
-        const folderRadio = document.getElementById('folder');
-        const apiRadio = document.getElementById('api');
-        const uploadSection = document.getElementById('uploadSection');
-        const folderSection = document.getElementById('folderSection');
-        const apiSection = document.getElementById('apiInputSection');
-
-        function toggleSections() {
-            uploadSection.style.display = uploadRadio.checked ? '' : 'none';
-            folderSection.style.display = folderRadio.checked ? '' : 'none';
-            apiSection.style.display = apiRadio.checked ? '' : 'none';
-
-            // toggle required เฉพาะตอนเลือก API
-            document.getElementById('plant').required = apiRadio.checked;
-            document.getElementById('year_quarter').required = apiRadio.checked;
-            document.getElementById('api_operation').required = apiRadio.checked;
-        }
-
-        [uploadRadio, folderRadio, apiRadio].forEach(radio => {
-            radio.addEventListener('change', toggleSections);
-        });
-
-        // Initial call to set the correct section visible
-        toggleSections();
-    });
-
-    document.getElementById('testApiBtn').onclick = async function() {
-        // เก็บค่าจาก input
-        const endpoint = document.getElementById('endpoint').value;
-        const plant = document.getElementById('plant').value;
-        const year_quarter = document.getElementById('year_quarter').value;
-        const api_operation = document.getElementById('api_operation').value;
-        const bom_no = document.getElementById('bom_no').value;
-
-        // สร้าง query string
-        const params = new URLSearchParams({
-            endpoint,
-            plant,
-            year_quarter,
-            operation: api_operation,
-            bom_no
-        }).toString();
-
-        const resultBox = document.getElementById('apiResult');
-        resultBox.textContent = "Loading...";
-        try {
-            const res = await fetch('/api/?' + params);
-            let data;
-            try {
-                data = await res.json();
-            } catch {
-                resultBox.textContent = "API ไม่ได้ส่งข้อมูล JSON";
-                return;
+        document.addEventListener('DOMContentLoaded', function() {
+            // Method selection handling
+            const methodOptions = document.querySelectorAll('.method-option');
+            const methodRadios = document.querySelectorAll('.method-radio');
+            const inputSections = document.querySelectorAll('.input-section');
+            
+            methodOptions.forEach(option => {
+                option.addEventListener('click', function() {
+                    const method = this.dataset.method;
+                    const radio = document.getElementById(method);
+                    
+                    // Update radio selection
+                    methodRadios.forEach(r => r.checked = false);
+                    radio.checked = true;
+                    
+                    // Update visual selection
+                    methodOptions.forEach(opt => opt.classList.remove('selected'));
+                    this.classList.add('selected');
+                    
+                    // Show corresponding input section
+                    inputSections.forEach(section => {
+                        section.classList.remove('active');
+                        if (section.id === method + 'Section') {
+                            section.classList.add('active');
+                        }
+                    });
+                    
+                    // Update required fields
+                    updateRequiredFields(method);
+                });
+            });
+            
+            // Set initial selection
+            document.querySelector('.method-option[data-method="upload"]').classList.add('selected');
+            
+            function updateRequiredFields(method) {
+                const apiFields = ['plant', 'year_quarter', 'api_operation'];
+                apiFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    field.required = (method === 'api');
+                });
             }
-            resultBox.textContent = JSON.stringify(data, null, 2);
-        } catch (err) {
-            resultBox.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ API: " + err;
-        }
-    };
-
-document.querySelector('form.method-form').onsubmit = function (e) {
-    const fileInput = document.getElementById('fileInput');
-
-    if (document.getElementById('upload').checked) {
-        if (!fileInput.value) {
-            alert('กรุณาเลือกไฟล์ก่อน');
-            e.preventDefault();
-            return false;
-        }
-    }
-
-    if (document.getElementById('folder').checked) {
-        if (!fileInput.value) {
-            alert('กรุณาเลือกโฟลเดอร์ก่อน');
-            e.preventDefault();
-            return false;
-        }
-    }
-};
+            
+            // Folder file handling
+            const folderDropdown = document.getElementById('folderDropdown');
+            if (folderDropdown) {
+                folderDropdown.addEventListener('change', function() {
+                    const selectedFolder = this.value;
+                    if (selectedFolder) {
+                        loadFolderFiles(selectedFolder);
+                    }
+                });
+            }
+            
+            function loadFolderFiles(selectedFolder) {
+                const submitBtn = document.querySelector('.btn-method-next');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>กำลังโหลดไฟล์...';
+                submitBtn.disabled = true;
+                
+                fetch(`/api/folder_files?folder_path=${encodeURIComponent(selectedFolder)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.files && data.files.length > 0) {
+                            showFolderFiles(data);
+                        } else {
+                            showAlert('ไม่พบไฟล์ในโฟลเดอร์ที่เลือก', 'warning');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showAlert('เกิดข้อผิดพลาดในการดึงไฟล์', 'danger');
+                    })
+                    .finally(() => {
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = false;
+                    });
+            }
+            
+            function showFolderFiles(data) {
+                // Remove existing files list
+                const existingFilesList = document.getElementById('folderFilesList');
+                if (existingFilesList) {
+                    existingFilesList.remove();
+                }
+                
+                // Create new files list
+                const filesList = document.createElement('div');
+                filesList.id = 'folderFilesList';
+                filesList.className = 'folder-files-container';
+                filesList.innerHTML = `
+                    <h6 class="mb-3">
+                        <i class="fas fa-folder-open text-primary me-2"></i>
+                        ไฟล์ในโฟลเดอร์ ${data.folder.split('/').pop()} 
+                        <span class="badge bg-primary">${data.file_count} ไฟล์</span>
+                    </h6>
+                    <div class="mb-3">
+                        <button type="button" class="btn-file-action" onclick="selectAllFiles()">
+                            <i class="fas fa-check-double me-1"></i>เลือกทั้งหมด
+                        </button>
+                        <button type="button" class="btn-file-action" onclick="selectNoFiles()">
+                            <i class="fas fa-times me-1"></i>ยกเลิกทั้งหมด
+                        </button>
+                    </div>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${data.files.map(file => `
+                            <div class="file-checkbox-item">
+                                <div class="form-check">
+                                    <input class="form-check-input folder-file-checkbox" type="checkbox" 
+                                           name="selected_files" value="${file.name}" id="file_${file.name}">
+                                    <label class="form-check-label w-100" for="file_${file.name}">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="text-truncate me-2" title="${file.name}">
+                                                <i class="fas fa-file-alt text-muted me-2"></i>
+                                                ${file.name}
+                                            </span>
+                                            <small class="text-muted">${file.size_mb} MB</small>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle text-info me-1"></i>
+                            <strong>หมายเหตุ:</strong> หากไม่เลือกไฟล์ใด ระบบจะใช้ไฟล์ทั้งหมดในโฟลเดอร์
+                        </small>
+                    </div>
+                `;
+                
+                document.getElementById('folderSection').appendChild(filesList);
+            }
+            
+            // Global functions for file selection
+            window.selectAllFiles = function() {
+                const checkboxes = document.querySelectorAll('.folder-file-checkbox');
+                checkboxes.forEach(cb => cb.checked = true);
+                showAlert(`เลือกไฟล์แล้ว ${checkboxes.length} ไฟล์`, 'success');
+            };
+            
+            window.selectNoFiles = function() {
+                const checkboxes = document.querySelectorAll('.folder-file-checkbox');
+                checkboxes.forEach(cb => cb.checked = false);
+                showAlert('ยกเลิกการเลือกไฟล์ทั้งหมดแล้ว', 'info');
+            };
+            
+            // API testing
+            document.getElementById('testApiBtn').addEventListener('click', async function() {
+                const endpoint = document.getElementById('endpoint').value;
+                const plant = document.getElementById('plant').value;
+                const year_quarter = document.getElementById('year_quarter').value;
+                const api_operation = document.getElementById('api_operation').value;
+                const bom_no = document.getElementById('bom_no').value;
+                
+                if (!plant || !year_quarter || !api_operation) {
+                    showAlert('กรุณากรอกข้อมูล Plant, Year Quarter และ Operation', 'warning');
+                    return;
+                }
+                
+                const params = new URLSearchParams({
+                    endpoint,
+                    plant,
+                    year_quarter,
+                    operation: api_operation,
+                    bom_no
+                }).toString();
+                
+                const resultContainer = document.getElementById('apiResult');
+                const resultContent = document.getElementById('apiResultContent');
+                
+                resultContainer.style.display = 'block';
+                resultContent.textContent = 'กำลังทดสอบ API...';
+                
+                try {
+                    const response = await fetch('/api/?' + params);
+                    const data = await response.json();
+                    resultContent.textContent = JSON.stringify(data, null, 2);
+                } catch (error) {
+                    resultContent.textContent = 'เกิดข้อผิดพลาด: ' + error.message;
+                }
+            });
+            
+            // Form validation
+            document.querySelector('.method-form').addEventListener('submit', function(e) {
+                const selectedMethod = document.querySelector('.method-radio:checked').value;
+                
+                if (selectedMethod === 'upload') {
+                    const fileInput = document.getElementById('fileInput');
+                    if (!fileInput.value) {
+                        e.preventDefault();
+                        showAlert('กรุณาเลือกไฟล์ก่อนดำเนินการต่อ', 'warning');
+                        return false;
+                    }
+                } else if (selectedMethod === 'folder') {
+                    const folderDropdown = document.getElementById('folderDropdown');
+                    if (!folderDropdown.value) {
+                        e.preventDefault();
+                        showAlert('กรุณาเลือกโฟลเดอร์ก่อนดำเนินการต่อ', 'warning');
+                        return false;
+                    }
+                }
+            });
+            
+            function showAlert(message, type) {
+                // Create and show bootstrap alert
+                const alertHtml = `
+                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                const container = document.querySelector('.container');
+                const existingAlert = container.querySelector('.alert');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
+                
+                container.insertAdjacentHTML('afterbegin', alertHtml);
+                
+                // Auto dismiss after 3 seconds
+                setTimeout(() => {
+                    const alert = container.querySelector('.alert');
+                    if (alert) {
+                        const bsAlert = new bootstrap.Alert(alert);
+                        bsAlert.close();
+                    }
+                }, 3000);
+            }
+        });
     </script>
 </body>
 </html>

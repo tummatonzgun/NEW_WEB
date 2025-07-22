@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>กำลังประมวลผล...</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .processing-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .processing-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            padding: 50px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .processing-icon {
+            font-size: 4rem;
+            color: #667eea;
+            margin-bottom: 30px;
+            animation: spin 2s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .processing-title {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .processing-subtitle {
+            font-size: 1.1rem;
+            color: #7f8c8d;
+            margin-bottom: 40px;
+        }
+        
+        .progress-container {
+            margin-bottom: 30px;
+        }
+        
+        .progress {
+            height: 20px;
+            border-radius: 10px;
+            background-color: #e9ecef;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            transition: width 0.5s ease;
+            border-radius: 10px;
+            position: relative;
+        }
+        
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .progress-text {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-top: 15px;
+            font-size: 1.1rem;
+        }
+        
+        .status-text {
+            color: #667eea;
+            font-weight: 500;
+            margin-top: 10px;
+            font-size: 1rem;
+        }
+        
+        .processing-details {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .detail-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .detail-value {
+            color: #6c757d;
+        }
+        
+        .error-container {
+            display: none;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            color: #721c24;
+        }
+        
+        .success-container {
+            display: none;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            color: #155724;
+        }
+        
+        .action-buttons {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .btn-custom {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 0 10px;
+        }
+        
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            color: white;
+        }
+        
+        .dots {
+            display: inline-block;
+        }
+        
+        .dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <div class="processing-container">
+        <div class="processing-card">
+            <div class="processing-icon">
+                <i class="fas fa-cog" id="processingIcon"></i>
+            </div>
+            
+            <h1 class="processing-title">กำลังประมวลผล<span class="dots"></span></h1>
+            <p class="processing-subtitle">{{ operation }} - {{ func_name }}</p>
+            
+            <div class="progress-container">
+                <div class="progress">
+                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+                <div class="progress-text">
+                    <span id="progressText">0%</span>
+                </div>
+                <div class="status-text" id="statusText">เริ่มต้นการประมวลผล...</div>
+            </div>
+            
+            <div class="processing-details">
+                <div class="detail-item">
+                    <span class="detail-label">การดำเนินงาน:</span>
+                    <span class="detail-value">{{ operation }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">ฟังก์ชัน:</span>
+                    <span class="detail-value">{{ func_name }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Task ID:</span>
+                    <span class="detail-value">{{ task_id }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">เวลาเริ่มต้น:</span>
+                    <span class="detail-value" id="startTime"></span>
+                </div>
+            </div>
+            
+            <div class="error-container" id="errorContainer">
+                <h5><i class="fas fa-exclamation-triangle me-2"></i>เกิดข้อผิดพลาด</h5>
+                <p id="errorMessage"></p>
+            </div>
+            
+            <div class="success-container" id="successContainer">
+                <h5><i class="fas fa-check-circle me-2"></i>ประมวลผลเสร็จสิ้น!</h5>
+                <p>ระบบได้ประมวลผลข้อมูลเสร็จเรียบร้อยแล้ว</p>
+            </div>
+            
+            <div class="action-buttons" id="actionButtons">
+                <a href="/result" class="btn btn-custom">
+                    <i class="fas fa-chart-bar me-2"></i>ดูผลลัพธ์
+                </a>
+                <a href="/" class="btn btn-custom">
+                    <i class="fas fa-home me-2"></i>กลับหน้าหลัก
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const taskId = '{{ task_id }}';
+        let pollInterval;
+        
+        // แสดงเวลาเริ่มต้น
+        document.getElementById('startTime').textContent = new Date().toLocaleString('th-TH');
+        
+        function pollProgress() {
+            fetch(`/api/progress/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error:', data.error);
+                        return;
+                    }
+                    
+                    // อัพเดท progress bar
+                    const progressBar = document.getElementById('progressBar');
+                    const progressText = document.getElementById('progressText');
+                    const statusText = document.getElementById('statusText');
+                    
+                    progressBar.style.width = data.progress + '%';
+                    progressText.textContent = data.progress + '%';
+                    statusText.textContent = data.status;
+                    
+                    // ตรวจสอบว่าเสร็จสิ้นหรือเกิดข้อผิดพลาด
+                    if (data.completed) {
+                        clearInterval(pollInterval);
+                        showSuccess();
+                    } else if (data.error) {
+                        clearInterval(pollInterval);
+                        showError(data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Polling error:', error);
+                });
+        }
+        
+        function showSuccess() {
+            document.getElementById('processingIcon').className = 'fas fa-check-circle';
+            document.getElementById('processingIcon').style.color = '#28a745';
+            document.getElementById('processingIcon').style.animation = 'none';
+            document.querySelector('.processing-title').innerHTML = 'ประมวลผลเสร็จสิ้น!';
+            document.getElementById('successContainer').style.display = 'block';
+            document.getElementById('actionButtons').style.display = 'block';
+        }
+        
+        function showError(error) {
+            document.getElementById('processingIcon').className = 'fas fa-exclamation-triangle';
+            document.getElementById('processingIcon').style.color = '#dc3545';
+            document.getElementById('processingIcon').style.animation = 'none';
+            document.querySelector('.processing-title').innerHTML = 'เกิดข้อผิดพลาด';
+            document.getElementById('errorMessage').textContent = error;
+            document.getElementById('errorContainer').style.display = 'block';
+            document.getElementById('actionButtons').style.display = 'block';
+        }
+        
+        // เริ่ม polling
+        pollProgress(); // เรียกทันที
+        pollInterval = setInterval(pollProgress, 1000); // ทุก 1 วินาที
+        
+        // หยุด polling เมื่อออกจากหน้า
+        window.addEventListener('beforeunload', function() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+        });
+    </script>
+</body>
+</html>
