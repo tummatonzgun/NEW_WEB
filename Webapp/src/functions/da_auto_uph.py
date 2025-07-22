@@ -10,13 +10,12 @@ from urllib.parse import urlparse
 def load_data_from_source(source):
     """
     โหลดข้อมูลจากแหล่งต่างๆ (Excel, JSON file, JSON API)
-    
-    Parameters:
-    source (str): ที่อยู่ของข้อมูล (file path หรือ URL)
-    
-    Returns:
-    pandas.DataFrame: ข้อมูลที่โหลดแล้ว
     """
+    # รองรับทั้งกรณี source เป็น list หรือ str
+    if isinstance(source, list):
+        df_list = [load_data_from_source(s) for s in source]
+        return pd.concat(df_list, ignore_index=True)
+    
     try:
         # ตรวจสอบว่าเป็น URL หรือไม่
         parsed = urlparse(source)

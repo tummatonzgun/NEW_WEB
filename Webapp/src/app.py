@@ -180,13 +180,10 @@ def function():
             func_module = importlib.import_module(f"functions.{func_name.lower()}")
             func = getattr(func_module, func_name)
             temp_root = os.path.join(os.getcwd(), "temp")
-            if isinstance(file_path, list):
-                result = [func(f, temp_root) for f in file_path]
+            if func_name in ["DA_AUTO_UPH", "PNP_AUTO_UPH", "WB_AUTO_UPH"]:
+                result = func(file_path, temp_root, start_date, end_date)
             else:
-                if func_name in ["DA_AUTO_UPH", "PNP_AUTO_UPH", "WB_AUTO_UPH"]:
-                    result = func(file_path, temp_root, start_date, end_date)
-                else:
-                    result = func(file_path, temp_root)
+                result = func(file_path, temp_root)
         except Exception as e:
             result = f"เกิดข้อผิดพลาดในการเรียกใช้ฟังก์ชัน {func_name}: {e}"
 
