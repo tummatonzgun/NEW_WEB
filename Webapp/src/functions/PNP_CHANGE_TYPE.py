@@ -3,11 +3,14 @@ import glob
 import os
 import re
 
-def run_all_years(input_path, output_dir):
+def run_all_years(input_path_or_file, output_dir):
+    if os.path.isfile(input_path_or_file):
+        all_files = [input_path_or_file]
+    else:
+        all_files = glob.glob(os.path.join(input_path_or_file, "WF size* (UTL1).*"))
     target_years = [2023, 2024, 2025, 2026, 2027]
-    print(f"กำลังประมวลผลไฟล์จาก {input_path} สำหรับปี {target_years}")
+    print(f"กำลังประมวลผลไฟล์จาก {input_path_or_file} สำหรับปี {target_years}")
     # หาไฟล์ทั้งหมดที่ตรงชื่อ
-    all_files = glob.glob(os.path.join(input_path, "WF size* (UTL1).*"))
     print(f"เจอไฟล์ทั้งหมด {len(all_files)} ไฟล์")
 
     # แยกไฟล์ตามปี
@@ -48,7 +51,7 @@ def run_all_years(input_path, output_dir):
 
     if not df_list:
         print("❌ ไม่มีไฟล์ที่โหลดได้เลย")
-        return
+        return None  # หรือ return None, "❌ ไม่มีไฟล์ที่โหลดได้เลย"
 
     df_all = pd.concat(df_list, ignore_index=True)
 
@@ -169,7 +172,7 @@ def run_all_years(input_path, output_dir):
     print(f"📋 BOM ที่ไม่มีการเปลี่ยนแปลง: {no_change_count} รายการ")
     print(f"📈 รวมทั้งหมด: {len(summary_df)} รายการ")
     
-    return summary_df
+    return output_file  # เปลี่ยนจาก return summary_df เป็น return output_file
 
 # ✅ เก็บฟังก์ชัน lookup_last_type ไว้เพื่อใช้กับเว็บ
 def lookup_last_type(input_bom_file, output_dir):
@@ -199,5 +202,5 @@ def lookup_last_type(input_bom_file, output_dir):
     df_merged = pd.merge(df_bom, df_last, on=merge_cols, how='left')
     return df_merged
 
-def run(input_path, output_dir):
+def PNP_CHANGE_TYPE(input_path, output_dir):
     return run_all_years(input_path, output_dir)

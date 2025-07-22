@@ -70,13 +70,13 @@ def method():
 
         # รับโฟลเดอร์ (เลือกไฟล์ในโฟลเดอร์ได้)
         elif input_method == "folder":
-            selected_file = request.form.get("selected_folder")
-            if not selected_file:
+            selected_files = request.form.getlist("selected_folder[]") or request.form.getlist("selected_folder")
+            if not selected_files:
                 flash("กรุณาเลือกไฟล์จากโฟลเดอร์ก่อน", "error")
                 return redirect(url_for("method", operation=operation))
             src_folder = os.path.join(os.getcwd(), "Webapp", "src", folder_name)
-            file_path = os.path.join(src_folder, selected_file)
-            session["selected_folder"] = [file_path]  # เก็บเป็น list
+            file_paths = [os.path.join(src_folder, f) for f in selected_files]
+            session["selected_folder"] = file_paths  # เก็บเป็น list
 
         # รับ API params (เหมือนเดิม)
         elif input_method == "api":
@@ -170,6 +170,8 @@ def function():
             file_path = session.get("selected_folder")
         elif input_method == "api":
             file_path = session.get("api_json_path")
+        else:
+            file_path = None
 
         # ประมวลผลฟังก์ชัน
         try:
