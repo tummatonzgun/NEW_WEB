@@ -41,6 +41,15 @@ def method():
         input_method = request.form.get("inputMethod")
         session["input_method"] = input_method
 
+        # เพิ่ม mapping ตรงนี้
+        operation_folder_map = {
+            "Die Attach": "data_Da",
+            "Pick & Place": "data_PNP",
+            "Wire Bond": "data_WB",
+            "Singulation": "data_logview",
+        }
+        folder_name = operation_folder_map.get(operation, "")
+
         temp_root = os.path.join(os.getcwd(), "temp")
         os.makedirs(temp_root, exist_ok=True)
 
@@ -61,32 +70,13 @@ def method():
 
         # รับโฟลเดอร์ (เลือกไฟล์ในโฟลเดอร์ได้)
         elif input_method == "folder":
-            selected_folder = request.form.get("selected_folder")
-            selected_files = request.form.getlist("selected_files")  # รับไฟล์ที่เลือกจากโฟลเดอร์
-            if not selected_folder:
-                flash("กรุณาเลือกโฟลเดอร์ก่อน", "error")
+            selected_file = request.form.get("selected_folder")
+            if not selected_file:
+                flash("กรุณาเลือกไฟล์จากโฟลเดอร์ก่อน", "error")
                 return redirect(url_for("method", operation=operation))
-            src_folder = os.path.join(os.getcwd(), selected_folder)
-            if not os.path.exists(src_folder):
-                flash("ไม่พบโฟลเดอร์ที่เลือก", "error")
-                return redirect(url_for("method", operation=operation))
-            temp_folder = tempfile.mkdtemp(dir=temp_root)
-            copied_files = []
-            if selected_files:
-                # copy เฉพาะไฟล์ที่เลือก
-                for fname in selected_files:
-                    src_file = os.path.join(src_folder, fname)
-                    if os.path.isfile(src_file):
-                        shutil.copy2(src_file, temp_folder)
-                        copied_files.append(os.path.join(temp_folder, fname))
-            else:
-                # ถ้าไม่ได้เลือกไฟล์ ให้ copy ทุกไฟล์ในโฟลเดอร์
-                for fname in os.listdir(src_folder):
-                    src_file = os.path.join(src_folder, fname)
-                    if os.path.isfile(src_file):
-                        shutil.copy2(src_file, temp_folder)
-                        copied_files.append(os.path.join(temp_folder, fname))
-            session["selected_folder"] = copied_files  # เก็บเป็น list
+            src_folder = os.path.join(os.getcwd(), "Webapp", "src", folder_name)
+            file_path = os.path.join(src_folder, selected_file)
+            session["selected_folder"] = [file_path]  # เก็บเป็น list
 
         # รับ API params (เหมือนเดิม)
         elif input_method == "api":
@@ -139,13 +129,24 @@ def method():
     # GET: render หน้าเลือก method
     operation = request.args.get("operation", "")
     # --- เพิ่มสำหรับเลือกไฟล์ในโฟลเดอร์ ---
-    folder_files = []
-    selected_folder = request.args.get("selected_folder")
-    if selected_folder:
-        src_folder = os.path.join(os.getcwd(), selected_folder)
-        if os.path.exists(src_folder):
-            folder_files = [f for f in os.listdir(src_folder) if os.path.isfile(os.path.join(src_folder, f))]
-    return render_template("method.html", operation=operation, folder_files=folder_files)
+    operation_folder_map = {
+        "Die Attach": "data_Da",
+        "Pick & Place": "data_PNP",
+        "Wire Bond": "data_WB",
+        "Singulation": "data_logview",  # แก้ไขชื่อโฟลเดอร์ให้ตรงกับที่มีอยู่
+    }
+    folder_name = operation_folder_map.get(operation, "")
+    folder_list = []
+    show_api = operation not in ["Singulation", "Pick & Place"]  # แสดง API เฉพาะบาง operation
+    if folder_name:
+        # เดิม: folder_root = os.path.join(os.getcwd(), folder_name)
+        # แก้เป็น:
+        folder_root = os.path.join(os.getcwd(), "Webapp", "src", folder_name)
+        if os.path.exists(folder_root):
+            folder_list = [f for f in os.listdir(folder_root) if os.path.isfile(os.path.join(folder_root, f))]
+    print("DEBUG folder_root:", folder_root)
+    print("DEBUG folder_list:", folder_list)
+    return render_template("method.html", operation=operation, folder_root=folder_name, folder_list=folder_list, show_api=show_api)
 
 @app.route("/function", methods=["GET", "POST"])
 def function():

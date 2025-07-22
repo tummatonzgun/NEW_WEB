@@ -146,6 +146,7 @@
                     <span class="method-desc">เลือกไฟล์จากโฟลเดอร์ที่มีในระบบ</span>
                 </label>
             </div>
+            {% if show_api %}
             <div class="method-radio">
                 <input type="radio" id="api" name="inputMethod" value="api">
                 <label for="api">
@@ -153,6 +154,7 @@
                     <span class="method-desc">ดึงไฟล์จาก API ภายนอก</span>
                 </label>
             </div>
+            {% endif %}
         </div>
 
         <!-- Section: อัปโหลดไฟล์ -->
@@ -161,25 +163,25 @@
             <input type="file" id="fileInput" name="file" class="form-control" multiple>
         </div>
 
-        <!-- Section: เลือกโฟลเดอร์ -->
+        <!-- Section: เลือกไฟล์จากโฟลเดอร์ -->
         <div id="folderSection" class="input-section" style="display:none;">
-            <label for="folderDropdown" class="form-label">เลือกโฟลเดอร์</label>
+            <label for="folderDropdown" class="form-label">เลือกไฟล์จากโฟลเดอร์</label>
             <select id="folderDropdown" name="selected_folder" class="form-control">
-                <option value="">-- กรุณาเลือกโฟลเดอร์ --</option>
-                <option value="folder1">โฟลเดอร์ 1</option>
-                <option value="folder2">โฟลเดอร์ 2</option>
-                <option value="folder3">โฟลเดอร์ 3</option>
+                <option value="">-- กรุณาเลือกไฟล์ --</option>
+                {% for file in folder_list %}
+                    <option value="{{ file }}">{{ file }}</option>
+                {% endfor %}
             </select>
         </div>
 
         <!-- Section: API -->
+        {% if show_api %}
         <div id="apiInputSection" class="input-section" style="display:none;">
             <label for="endpoint" class="form-label">API Endpoint</label>
             <select id="endpoint" name="endpoint" class="form-control" required>
                 <option value="data">AutoUPH_Get (data)</option>
                 <!-- เพิ่ม endpoint อื่นๆ ตามต้องการ -->
             </select>
-
             <label for="plant" class="form-label">Plant</label>
             <input type="text" id="plant" name="plant" class="form-control" required>
 
@@ -197,6 +199,7 @@
             </button>
             <pre id="apiResult" style="background:#222; color:#fff; padding:1em; border-radius:8px; min-height:80px;"></pre>
         </div>
+        {% endif %}
 
         <input type="hidden" name="operation" value="{{ operation }}">
         <button type="submit" class="btn-method-next">ถัดไป</button>
@@ -270,6 +273,7 @@
 
 document.querySelector('form.method-form').onsubmit = function (e) {
     const fileInput = document.getElementById('fileInput');
+    const folderDropdown = document.getElementById('folderDropdown');
 
     if (document.getElementById('upload').checked) {
         if (!fileInput.value) {
@@ -280,8 +284,8 @@ document.querySelector('form.method-form').onsubmit = function (e) {
     }
 
     if (document.getElementById('folder').checked) {
-        if (!fileInput.value) {
-            alert('กรุณาเลือกโฟลเดอร์ก่อน');
+        if (!folderDropdown.value) {
+            alert('กรุณาเลือกไฟล์จากโฟลเดอร์ก่อน');
             e.preventDefault();
             return false;
         }
