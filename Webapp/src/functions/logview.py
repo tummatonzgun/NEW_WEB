@@ -913,13 +913,13 @@ def LOGVIEW(input_path, output_dir):
     
     # 3. ตรวจสอบไฟล์ package
     print("📊 ขั้นตอนที่ 3: ตรวจสอบไฟล์ package...")
-    package_path = os.path.join(BASE_DIR, "..", "Upload", "export package and frame stock Rev.06.xlsx")
+    package_path = os.path.join(BASE_DIR, "..", "data_MAP", "export package and frame stock Rev.06.xlsx")
     package_path = os.path.abspath(package_path)
     
     print(f"   📁 ตรวจสอบ package path: {package_path}")
     
     if not os.path.exists(package_path):
-        print("   ❌ ไม่พบไฟล์ export package and frame stock Rev.04.xlsx ใน Upload")
+        print("   ❌ ไม่พบไฟล์ export package and frame stock Rev.04.xlsx ใน data_MAP")
         print(f"   📁 ตรวจสอบ directory: {os.path.dirname(package_path)}")
         if os.path.exists(os.path.dirname(package_path)):
             upload_files = os.listdir(os.path.dirname(package_path))
