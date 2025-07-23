@@ -152,8 +152,18 @@ def method():
 def function():
     if request.method == "POST":
         func_name = request.form.get("func_name")
+        # รองรับทั้งแบบเดิมและ date_range picker
         start_date = request.form.get("start_date")
         end_date = request.form.get("end_date")
+        date_range = request.form.get("date_range")
+        if date_range and (not start_date or not end_date):
+            # แยกวันที่จาก date_range (รองรับหลายรูปแบบ)
+            for sep in [' to ', ',', ' ']:
+                if sep in date_range:
+                    parts = [d.strip() for d in date_range.split(sep)]
+                    if len(parts) == 2:
+                        start_date, end_date = parts
+                        break
         if not start_date or not end_date:
             start_date = None
             end_date = None
@@ -208,6 +218,8 @@ def function():
         session["current_file"] = file_path
         session["operation"] = operation
         session["func_name"] = func_name
+        session["start_date"] = start_date      # <--- เพิ่ม
+        session["end_date"] = end_date          # <--- เพิ่ม
         return redirect(url_for("result"))
 
     # GET: render หน้าเลือกฟังก์ชัน (เพิ่ม preview date range)
@@ -282,7 +294,7 @@ def result():
                 result_data = df.to_dict(orient="records")
         except Exception as e:
             table_html = f"<pre>เกิดข้อผิดพลาดในการอ่านไฟล์ผลลัพธ์: {e}</pre>"
-    return render_template("result.html", result=result_data, current_file=current_file, operation=operation, func_name=func_name, table_html=table_html)
+    return render_template("result.html", result=result_data, current_file=current_file, operation=operation, func_name=func_name, table_html=table_html, start_date=session.get("start_date"), end_date=session.get("end_date"))
 
 @app.route("/api/", methods=["GET"])
 def get_api_data():

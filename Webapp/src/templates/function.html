@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>เลือกฟังก์ชัน</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -115,10 +117,8 @@
                 {% endfor %}
             </select>
             <div id="dateRangeFields" style="display:none;">
-                <label for="startDate">วันที่เริ่มต้น:</label>
-                <input type="date" name="start_date" id="startDate">
-                <label for="endDate">วันที่สิ้นสุด:</label>
-                <input type="date" name="end_date" id="endDate">
+                <label for="dateRange">ช่วงวันที่:</label>
+                <input type="text" id="dateRange" name="date_range" placeholder="เลือกช่วงวันที่">
             </div>
             <div class="action-row">
                 <button type="submit" class="btn-method-next">ประมวลผล</button>
@@ -146,7 +146,13 @@
             dateFields.style.display = 'none';
         }
     }
-    window.onload = toggleDateRange;
+    window.onload = function() {
+        toggleDateRange();
+        flatpickr("#dateRange", {
+            mode: "range",
+            dateFormat: "Y-m-d"
+        });
+    };
     </script>
 </body>
 </html>

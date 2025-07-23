@@ -364,41 +364,27 @@ def filter_data_by_date(df, start_date, end_date):
     return filtered_df
 
 def calculate_group_average(df, start_date, end_date):
-    """คำนวณค่าเฉลี่ยตามกลุ่ม"""
+    """คำนวณค่าเฉลี่ยตามกลุ่ม และแนบคอลัมน์เดิมที่ต้องการ"""
     col_map = {col.lower(): col for col in df.columns}
-    
-    # หาคอลัมน์ Machine Model
-    model_col = None
-    if 'machine model' in col_map:
-        model_col = col_map['machine model']
-    elif 'machine_model' in col_map:
-        model_col = col_map['machine_model']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ Machine Model หรือ Machine_Model ในข้อมูล")
-    
-    # หาคอลัมน์ bom_no
-    bom_col = None
-    if 'bom_no' in col_map:
-        bom_col = col_map['bom_no']
-    elif 'bom no' in col_map:
-        bom_col = col_map['bom no']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ bom_no ในข้อมูล")
-    
-    # หาคอลัมน์ UPH
-    uph_col = None
-    if 'uph' in col_map:
-        uph_col = col_map['uph']
-    else:
-        raise KeyError("ไม่พบคอลัมน์ UPH ในข้อมูล")
-    
-    # คำนวณค่าเฉลี่ยตามกลุ่ม
-    grouped_average = df.groupby([bom_col, model_col])[uph_col].mean().reset_index()
-    
-    # แสดงผลลัพธ์
+    model_col = col_map.get('machine model') or col_map.get('machine_model')
+    bom_col = col_map.get('bom_no') or col_map.get('bom no')
+    uph_col = col_map.get('uph')
+
+    # เลือกคอลัมน์ที่ต้องการแสดงในไฟล์ average
+    columns_to_keep = [bom_col, 'operation', model_col, uph_col]  # เพิ่ม/ลดได้ตามต้องการ
+
+    # คำนวณ mean เฉพาะ uph
+    grouped = df.groupby([bom_col, model_col], as_index=False).agg({uph_col: 'mean'})
+
+    # ดึงค่าแรกของคอลัมน์อื่นในแต่ละกลุ่ม
+    other_cols = [c for c in columns_to_keep if c not in [bom_col, model_col, uph_col]]
+    firsts = df.groupby([bom_col, model_col], as_index=False)[other_cols].first()
+
+    # รวมกลับ
+    grouped_average = pd.merge(grouped, firsts, on=[bom_col, model_col], how='left')
+
     print(f"\n=== ค่าเฉลี่ย UPH ตามกลุ่ม (ช่วงวันที่ {start_date} ถึง {end_date}) ===")
     print(grouped_average)
-    
     return grouped_average
 
 def save_results(df_cleaned, grouped_average, start_date, end_date, output_dir):
@@ -420,76 +406,6 @@ def save_results(df_cleaned, grouped_average, start_date, end_date, output_dir):
     print(f"บันทึกค่าเฉลี่ยตามกลุ่ม: {average_file}")
     
     return cleaned_file, average_file
-
-def preview_date_range(file_path):
-    """แสดงข้อมูลวันที่ในไฟล์ก่อนประมวลผล - รองรับ JSON API"""
-    try:
-        print("📅 กำลังตรวจสอบช่วงวันที่ในข้อมูล...")
-        
-        # โหลดข้อมูลจากแหล่งต่างๆ
-        df = load_data_from_source(file_path)
-        print(f"📄 ข้อมูลทั้งหมด: {len(df):,} แถว")
-        
-        # หาคอลัมน์วันที่
-        date_cols = []
-        for col_name in df.columns:
-            if any(keyword in col_name.lower() for keyword in ['date', 'time', 'วัน', 'เวลา']):
-                date_cols.append(col_name)
-        
-        if not date_cols:
-            print("⚠️ ไม่พบคอลัมน์วันที่ในข้อมูล")
-            return None
-        
-        date_col = date_cols[0]
-        print(f"🗓️ ใช้คอลัมน์วันที่: '{date_col}'")
-        
-        # แปลงข้อมูลวันที่
-        df['temp_date'] = pd.to_datetime(df[date_col], errors='coerce')
-        
-        # กรองข้อมูลที่แปลงวันที่ได้
-        valid_dates = df.dropna(subset=['temp_date'])
-        invalid_count = len(df) - len(valid_dates)
-        
-        if len(valid_dates) == 0:
-            print("❌ ไม่มีข้อมูลวันที่ที่ถูกต้องในข้อมูล")
-            return None
-        
-        # หาวันที่เริ่มต้นและสิ้นสุด
-        min_date = valid_dates['temp_date'].min()
-        max_date = valid_dates['temp_date'].max()
-        
-        # แสดงผลลัพธ์
-        print(f"\n📊 สรุปข้อมูลวันที่:")
-        print(f"  🗓️ วันที่เริ่มต้น: {min_date.strftime('%Y-%m-%d')} (ค.ศ.)")
-        print(f"  🗓️ วันที่สิ้นสุด: {max_date.strftime('%Y-%m-%d')} (ค.ศ.)")
-        print(f"  📈 จำนวนวัน: {(max_date - min_date).days + 1} วัน")
-        print(f"  ✅ ข้อมูลวันที่ถูกต้อง: {len(valid_dates):,} แถว")
-        
-        if invalid_count > 0:
-            print(f"  ⚠️ ข้อมูลวันที่ไม่ถูกต้อง: {invalid_count:,} แถว")
-        
-        # แสดงตัวอย่างข้อมูลตามช่วงเวลา
-        print(f"\n📋 การกระจายข้อมูลตามเดือน:")
-        monthly_counts = valid_dates.groupby(valid_dates['temp_date'].dt.to_period('M')).size()
-        for period, count in monthly_counts.head(10).items():
-            print(f"  📅 {period}: {count:,} แถว")
-        
-        if len(monthly_counts) > 10:
-            print(f"  ... และอีก {len(monthly_counts) - 10} เดือน")
-        
-        return {
-            'min_date': min_date.strftime('%Y-%m-%d'),
-            'max_date': max_date.strftime('%Y-%m-%d'),
-            'total_days': (max_date - min_date).days + 1,
-            'valid_records': len(valid_dates),
-            'invalid_records': invalid_count,
-            'date_column': date_col,
-            'monthly_distribution': {str(period): count for period, count in monthly_counts.to_dict().items()}
-        }
-        
-    except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดในการตรวจสอบวันที่: {str(e)}")
-        return None
 
 def process_die_attack_data(source):
     """ประมวลผลข้อมูล Die Attack - รองรับ JSON API"""
