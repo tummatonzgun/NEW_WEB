@@ -222,7 +222,6 @@ class WireBondingAnalyzer:
                     'removed_count': original_count - final_count,
                     'final_count': final_count
                 }
-            
             result_df = pd.concat(cleaned_data) if cleaned_data else df
             return result_df, outlier_info
         
@@ -518,16 +517,15 @@ def get_available_uph_files():
         return []
 
 def get_wire_data_file():
-    """ดึง path ของไฟล์ Wire Data จากโฟลเดอร์ data_wireWB สำหรับเว็บ"""
+    """ดึง path ของไฟล์ Wire Data จากโฟลเดอร์ data_MAP สำหรับเว็บ"""
     try:
-        # หา path ของ data_wireWB จาก current directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
         src_dir = os.path.dirname(current_dir)
-        wire_dir = os.path.join(src_dir, "data_wireWB")
-        
+        wire_dir = os.path.join(src_dir, "data_MAP")  # <-- เปลี่ยนตรงนี้
+
         if not os.path.exists(wire_dir):
             return None
-        
+
         for filename in os.listdir(wire_dir):
             if (filename.lower().endswith(('.xlsx', '.xls')) and 
                 ('wire' in filename.lower() or 'book' in filename.lower())):
@@ -535,20 +533,21 @@ def get_wire_data_file():
                     'filename': filename,
                     'filepath': os.path.join(wire_dir, filename)
                 }
-        
+
         return None
-        
+
     except Exception as e:
         print(f"Error getting Wire data file: {e}")
         return None
 
-def run_wb_auto_uph_web_multiple(selected_uph_files, output_filename=None):
+def run_wb_auto_uph_web_multiple(selected_uph_files, output_filename=None, output_dir=None):
     """
     รันการวิเคราะห์ WB_AUTO_UPH สำหรับหลายไฟล์ UPH และรวมผลลัพธ์
     
     Args:
         selected_uph_files (list): รายชื่อไฟล์ UPH ที่เลือกจากเว็บ
         output_filename (str, optional): ชื่อไฟล์ output ที่ต้องการ
+        output_dir (str, optional): โฟลเดอร์สำหรับไฟล์ output
     
     Returns:
         dict: ผลลัพธ์การวิเคราะห์
@@ -653,15 +652,19 @@ def run_wb_auto_uph_web_multiple(selected_uph_files, output_filename=None):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_filename = f"WB_Analysis_Combined_{timestamp}"
         
-        # สร้างโฟลเดอร์ output
-        upload_dir = os.path.join(src_dir, "Upload")
-        os.makedirs(upload_dir, exist_ok=True)
-        
+        # สร้างโฟลเดอร์ output (ใช้ output_dir ถ้าระบุ, ไม่เช่นนั้นใช้ temp)
+        if output_dir is None:
+            # fallback: ใช้ temp ใน project root
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(current_dir))
+            output_dir = os.path.join(project_root, "temp")
+        os.makedirs(output_dir, exist_ok=True)
+
         # เพิ่ม .xlsx ถ้ายังไม่มี
         if not output_filename.endswith('.xlsx'):
             output_filename += '.xlsx'
-        
-        output_path = os.path.join(upload_dir, output_filename)
+
+        output_path = os.path.join(output_dir, output_filename)
         
         # Export ไฟล์รวม
         print(f"💾 Exporting combined results...")
@@ -1027,17 +1030,26 @@ def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
 def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
     """
     WB_AUTO_UPH function สำหรับเรียกใช้ผ่าน workflow ปกติ
-    รองรับการรับไฟล์จากโฟลเดอร์ data_WB และ data_wireWB
+    รองรับการรับไฟล์จากโฟลเดอร์ data_WB, data_MAP หรือ list ของไฟล์ UPH
     """
     try:
         print(f"🚀 Starting WB_AUTO_UPH workflow...")
         print(f"📁 Input: {input_path}")
         print(f"📁 Output: {output_dir}")
-        
-        # เรียกใช้ function หลัก
-        result_path = run(input_path, output_dir)
-        return result_path
-        
+
+        # ถ้า input_path เป็น list ให้ใช้ run_wb_auto_uph_web_multiple
+        if isinstance(input_path, list):
+            result = run_wb_auto_uph_web_multiple(input_path, output_dir=output_dir)
+            if result.get("success"):
+                print(f"✅ WB_AUTO_UPH Multiple Files completed: {result['output_path']}")
+                return result["output_path"]
+            else:
+                raise Exception(result.get("error", "Unknown error"))
+        else:
+            # กรณีปกติ (โฟลเดอร์หรือไฟล์เดียว)
+            result_path = run(input_path, output_dir)
+            return result_path
+
     except Exception as e:
         print(f"❌ WB_AUTO_UPH workflow failed: {str(e)}")
         raise e

@@ -32,6 +32,7 @@
         }
         table {
             width: 100%;
+            table-layout: auto;
             border-collapse: collapse;
             margin-top: 24px;
             background: #f5faff;
@@ -42,6 +43,9 @@
             border: 1px solid #bdbdbd;
             padding: 10px 12px;
             text-align: left;
+            max-width: 320px;
+            word-break: break-word;
+            white-space: pre-line;
         }
         th {
             background: #e3f2fd;
@@ -95,11 +99,14 @@
 
 
         {% if table_html %}
-            {{ table_html | safe }}
+            <div style="overflow-x:auto;">
+                {{ table_html | safe }}
+            </div>
         {% else %}
             {% if result %}
                 {% if result is iterable and not result|string %}
                     <!-- กรณี result เป็น list ของ dict หรือ DataFrame -->
+                    <div style="overflow-x:auto;">
                     <table>
                         <thead>
                             <tr>
@@ -118,6 +125,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
                 {% elif result.__class__.__name__ == 'DataFrame' %}
                     <!-- กรณี result เป็น pandas DataFrame -->
                     {{ result.to_html(classes="table", border=0) | safe }}
