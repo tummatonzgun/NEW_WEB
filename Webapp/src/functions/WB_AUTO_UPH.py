@@ -78,13 +78,13 @@ class WireBondingAnalyzer:
     def load_data(self, uph_path, wire_data_path=None):
         """โหลดข้อมูลที่จำเป็น"""
         try:
-            # ถ้าไม่ระบุ wire_data_path ให้หาในโฟลเดอร์เดียวกับ uph_path
+            # ถ้าไม่ระบุ wire_data_path ให้หาในโฟลเดอร์ data_wireWB เสมอ
             if wire_data_path is None:
-                directory_path = os.path.dirname(uph_path)
-                wire_data_path = self.find_wire_data_file(directory_path)
+                # หา Wire data จากโฟลเดอร์ data_wireWB แทนโฟลเดอร์เดียวกับ UPH
+                wire_data_path = self.find_wire_data_file(None)  # ส่ง None เพื่อใช้ path ของ data_wireWB
                 
                 if wire_data_path is None:
-                    print("Wire data file not found. Please specify the path manually.")
+                    print("Wire data file not found in data_wireWB folder. Please check the folder exists and contains wire data files.")
                     return False
             
             # โหลดข้อมูล Wire Data
@@ -487,397 +487,6 @@ class WireBondingAnalyzer:
             print(f"🔍 Traceback: {traceback.format_exc()}")
             return False
 
-# === Web Interface Functions ===
-def get_available_uph_files():
-    """ดึงรายชื่อไฟล์ UPH ที่มีในโฟลเดอร์ data_WB สำหรับเว็บ"""
-    try:
-        # หา path ของ data_WB จาก current directory
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        src_dir = os.path.dirname(current_dir)
-        uph_dir = os.path.join(src_dir, "data_WB")
-        
-        if not os.path.exists(uph_dir):
-            return []
-        
-        uph_files = []
-        for filename in os.listdir(uph_dir):
-            if (filename.lower().endswith(('.xlsx', '.xls')) and 
-                ('uph' in filename.lower() or 'apl' in filename.lower() or 'wb_data' in filename.lower())):
-                uph_files.append({
-                    'filename': filename,
-                    'filepath': os.path.join(uph_dir, filename),
-                    'size': os.path.getsize(os.path.join(uph_dir, filename))
-                })
-        
-        # เรียงตามชื่อไฟล์
-        uph_files.sort(key=lambda x: x['filename'])
-        return uph_files
-        
-    except Exception as e:
-        print(f"Error getting UPH files: {e}")
-        return []
-
-def get_wire_data_file():
-    """ดึง path ของไฟล์ Wire Data จากโฟลเดอร์ data_wireWB สำหรับเว็บ"""
-    try:
-        # หา path ของ data_wireWB จาก current directory
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        src_dir = os.path.dirname(current_dir)
-        wire_dir = os.path.join(src_dir, "data_wireWB")
-        
-        if not os.path.exists(wire_dir):
-            return None
-        
-        for filename in os.listdir(wire_dir):
-            if (filename.lower().endswith(('.xlsx', '.xls')) and 
-                ('wire' in filename.lower() or 'book' in filename.lower())):
-                return {
-                    'filename': filename,
-                    'filepath': os.path.join(wire_dir, filename)
-                }
-        
-        return None
-        
-    except Exception as e:
-        print(f"Error getting Wire data file: {e}")
-        return None
-
-def run_wb_auto_uph_web_multiple(selected_uph_files, output_filename=None):
-    """
-    รันการวิเคราะห์ WB_AUTO_UPH สำหรับหลายไฟล์ UPH และรวมผลลัพธ์
-    
-    Args:
-        selected_uph_files (list): รายชื่อไฟล์ UPH ที่เลือกจากเว็บ
-        output_filename (str, optional): ชื่อไฟล์ output ที่ต้องการ
-    
-    Returns:
-        dict: ผลลัพธ์การวิเคราะห์
-    """
-    try:
-        print(f"🚀 Starting WB_AUTO_UPH Multiple Files Analysis...")
-        print(f"📁 Processing {len(selected_uph_files)} UPH files...")
-        
-        # หาไฟล์ Wire Data อัตโนมัติ
-        wire_data = get_wire_data_file()
-        if not wire_data:
-            return {
-                'success': False,
-                'error': 'ไม่พบไฟล์ Wire Data ในโฟลเดอร์ data_wireWB'
-            }
-        
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        src_dir = os.path.dirname(current_dir)
-        
-        # ตรวจสอบว่าไฟล์ UPH ทั้งหมดมีอยู่
-        uph_paths = []
-        for selected_file in selected_uph_files:
-            uph_path = os.path.join(src_dir, "data_WB", selected_file)
-            if not os.path.exists(uph_path):
-                return {
-                    'success': False,
-                    'error': f'ไม่พบไฟล์ UPH: {selected_file}'
-                }
-            uph_paths.append(uph_path)
-        
-        print(f"📁 Files to process:")
-        print(f"   Wire Data: {wire_data['filename']}")
-        for i, file in enumerate(selected_uph_files):
-            print(f"   UPH Data {i+1}: {file}")
-        
-        # เก็บผลลัพธ์จากทุกไฟล์
-        all_results = []
-        total_groups_all = 0
-        total_outliers_removed_all = 0
-        total_original_data_all = 0
-        total_data_points_all = 0
-        file_summary = []
-        
-        # ประมวลผลแต่ละไฟล์
-        for i, (uph_path, selected_file) in enumerate(zip(uph_paths, selected_uph_files)):
-            print(f"\n🔄 Processing file {i+1}/{len(selected_uph_files)}: {selected_file}")
-            
-            # สร้าง analyzer ใหม่สำหรับแต่ละไฟล์
-            analyzer = WireBondingAnalyzer()
-            
-            # โหลดข้อมูล
-            if not analyzer.load_data(uph_path, wire_data['filepath']):
-                print(f"⚠️ Warning: Could not load data from {selected_file}, skipping...")
-                continue
-            
-            # คำนวณประสิทธิภาพ
-            efficiency_df = analyzer.calculate_efficiency()
-            
-            if efficiency_df is None or efficiency_df.empty:
-                print(f"⚠️ Warning: No results from {selected_file}, skipping...")
-                continue
-            
-            # เพิ่มคอลัมน์ระบุแหล่งที่มาของไฟล์
-            efficiency_df['Source_File'] = selected_file
-            
-            # รวมผลลัพธ์
-            all_results.append(efficiency_df)
-            
-            # สรุปสถิติของไฟล์นี้
-            file_groups = len(efficiency_df)
-            file_outliers = efficiency_df['Outliers_Removed'].sum()
-            file_original = efficiency_df['Original_Count'].sum()
-            file_data_points = efficiency_df['Data_Points'].sum()
-            
-            total_groups_all += file_groups
-            total_outliers_removed_all += file_outliers
-            total_original_data_all += file_original
-            total_data_points_all += file_data_points
-            
-            file_summary.append({
-                'file': selected_file,
-                'groups': file_groups,
-                'outliers_removed': file_outliers,
-                'original_data': file_original,
-                'data_points': file_data_points
-            })
-            
-            print(f"✅ File {i+1} processed: {file_groups} groups, {file_data_points} data points")
-        
-        if not all_results:
-            return {
-                'success': False,
-                'error': 'ไม่สามารถประมวลผลไฟล์ใดๆ ได้'
-            }
-        
-        # รวมผลลัพธ์จากทุกไฟล์
-        print(f"\n📊 Combining results from {len(all_results)} files...")
-        combined_df = pd.concat(all_results, ignore_index=True)
-        
-        # สร้างชื่อไฟล์ output
-        if not output_filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"WB_Analysis_Combined_{timestamp}"
-        
-        # สร้างโฟลเดอร์ output
-        upload_dir = os.path.join(src_dir, "Upload")
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # เพิ่ม .xlsx ถ้ายังไม่มี
-        if not output_filename.endswith('.xlsx'):
-            output_filename += '.xlsx'
-        
-        output_path = os.path.join(upload_dir, output_filename)
-        
-        # Export ไฟล์รวม
-        print(f"💾 Exporting combined results...")
-        
-        try:
-            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                # Sheet 1: ผลลัพธ์รวมทั้งหมด
-                combined_df.to_excel(writer, sheet_name='Combined_Results', index=False)
-                
-                # Sheet 2: สรุปตามรุ่นเครื่อง
-                if len(combined_df) > 0:
-                    try:
-                        model_summary = combined_df.groupby('Model').agg({
-                            'UPH': ['mean', 'std', 'count', 'min', 'max'],
-                            'Wire Per Hour': 'mean',
-                            'Wire_Per_Unit': 'mean'
-                        }).round(3)
-                        model_summary.to_excel(writer, sheet_name='Model_Summary')
-                    except Exception as model_error:
-                        print(f"⚠️ Warning: Could not create Model_Summary sheet: {model_error}")
-                
-                # Sheet 3: สรุปตามไฟล์
-                try:
-                    file_summary_df = pd.DataFrame(file_summary)
-                    file_summary_df.to_excel(writer, sheet_name='File_Summary', index=False)
-                except Exception as file_error:
-                    print(f"⚠️ Warning: Could not create File_Summary sheet: {file_error}")
-                
-                # Sheet 4: สรุปภาพรวม
-                try:
-                    overall_stats = {
-                        'Total_Files_Processed': len(all_results),
-                        'Total_Groups': total_groups_all,
-                        'Average_UPH': round(combined_df['UPH'].mean(), 3),
-                        'Average_WPH': round(combined_df['Wire Per Hour'].mean(), 2),
-                        'Total_Data_Points': total_data_points_all,
-                        'Total_Outliers_Removed': total_outliers_removed_all,
-                        'Overall_Data_Quality': round((1 - total_outliers_removed_all/total_original_data_all) * 100, 2) if total_original_data_all > 0 else 0
-                    }
-                    overall_df = pd.DataFrame.from_dict(
-                        overall_stats, orient='index', columns=['Value'])
-                    overall_df.to_excel(writer, sheet_name='Overall_Summary')
-                except Exception as overall_error:
-                    print(f"⚠️ Warning: Could not create Overall_Summary sheet: {overall_error}")
-        
-        except Exception as export_error:
-            return {
-                'success': False,
-                'error': f'ไม่สามารถส่งออกไฟล์ผลลัพธ์ได้: {str(export_error)}'
-            }
-        
-        # ตรวจสอบไฟล์ที่สร้าง
-        if not os.path.exists(output_path):
-            return {
-                'success': False,
-                'error': 'ไฟล์ผลลัพธ์ไม่ถูกสร้าง'
-            }
-        
-        # คำนวณสถิติรวม
-        avg_efficiency = combined_df['UPH'].mean() if not combined_df.empty else 0
-        
-        print(f"✅ WB_AUTO_UPH Multiple Files Analysis completed successfully!")
-        
-        return {
-            'success': True,
-            'message': f'วิเคราะห์ข้อมูล Wire Bond จาก {len(selected_uph_files)} ไฟล์สำเร็จ',
-            'output_file': output_filename,
-            'output_path': output_path,
-            'summary': {
-                'files_processed': len(all_results),
-                'total_groups': total_groups_all,
-                'average_efficiency': round(avg_efficiency, 3),
-                'outliers_removed': total_outliers_removed_all,
-                'total_original_data': total_original_data_all,
-                'data_quality': round((1 - total_outliers_removed_all/total_original_data_all) * 100, 2) if total_original_data_all > 0 else 0,
-                'total_data_points': total_data_points_all
-            },
-            'wire_data_file': wire_data['filename'],
-            'uph_data_files': selected_uph_files,
-            'file_details': file_summary
-        }
-        
-    except Exception as e:
-        print(f"❌ Error in WB_AUTO_UPH Multiple Files Analysis: {e}")
-        import traceback
-        print(f"🔍 Full traceback:")
-        print(traceback.format_exc())
-        return {
-            'success': False,
-            'error': f'เกิดข้อผิดพลาด: {str(e)}'
-        }
-
-def run_wb_auto_uph_web(selected_uph_file, output_filename=None):
-    """
-    รันการวิเคราะห์ WB_AUTO_UPH สำหรับเว็บ
-    
-    Args:
-        selected_uph_file (str): ชื่อไฟล์ UPH ที่เลือกจากเว็บ
-        output_filename (str, optional): ชื่อไฟล์ output ที่ต้องการ
-    
-    Returns:
-        dict: ผลลัพธ์การวิเคราะห์
-    """
-    try:
-        print(f"🚀 Starting WB_AUTO_UPH Web Analysis...")
-        
-        # หาไฟล์ Wire Data อัตโนมัติ
-        wire_data = get_wire_data_file()
-        if not wire_data:
-            return {
-                'success': False,
-                'error': 'ไม่พบไฟล์ Wire Data ในโฟลเดอร์ data_wireWB'
-            }
-        
-        # หา path ของไฟล์ UPH ที่เลือก
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        src_dir = os.path.dirname(current_dir)
-        uph_path = os.path.join(src_dir, "data_WB", selected_uph_file)
-        
-        if not os.path.exists(uph_path):
-            return {
-                'success': False,
-                'error': f'ไม่พบไฟล์ UPH: {selected_uph_file}'
-            }
-        
-        print(f"📁 Files to process:")
-        print(f"   Wire Data: {wire_data['filename']}")
-        print(f"   UPH Data: {selected_uph_file}")
-        
-        # สร้าง analyzer
-        analyzer = WireBondingAnalyzer()
-        
-        # โหลดข้อมูล
-        print(f"📊 Loading data...")
-        if not analyzer.load_data(uph_path, wire_data['filepath']):
-            return {
-                'success': False,
-                'error': 'ไม่สามารถโหลดข้อมูลได้'
-            }
-        
-        # คำนวณประสิทธิภาพ
-        print(f"⚡ Calculating efficiency...")
-        efficiency_df = analyzer.calculate_efficiency()
-        
-        if efficiency_df is None or efficiency_df.empty:
-            return {
-                'success': False,
-                'error': 'ไม่สามารถคำนวณประสิทธิภาพได้ หรือไม่มีข้อมูลหลังจากประมวลผล'
-            }
-        
-        # สร้างชื่อไฟล์ output
-        if not output_filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"WB_Analysis_{timestamp}"
-        
-        # สร้างโฟลเดอร์ output
-        upload_dir = os.path.join(src_dir, "Upload")
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # เพิ่ม .xlsx ถ้ายังไม่มี
-        if not output_filename.endswith('.xlsx'):
-            output_filename += '.xlsx'
-        
-        output_path = os.path.join(upload_dir, output_filename)
-        
-        # Export ไฟล์
-        print(f"💾 Exporting results...")
-        if not analyzer.export_to_excel(output_path):
-            return {
-                'success': False,
-                'error': 'ไม่สามารถส่งออกไฟล์ผลลัพธ์ได้'
-            }
-        
-        # ตรวจสอบไฟล์ที่สร้าง
-        if not os.path.exists(output_path):
-            return {
-                'success': False,
-                'error': 'ไฟล์ผลลัพธ์ไม่ถูกสร้าง'
-            }
-        
-        # สรุปผลลัพธ์
-        total_groups = len(efficiency_df)
-        avg_efficiency = efficiency_df['UPH'].mean() if not efficiency_df.empty else 0
-        total_data_points = efficiency_df['Data_Points'].sum()
-        total_outliers_removed = efficiency_df['Outliers_Removed'].sum()
-        total_original_data = efficiency_df['Original_Count'].sum()
-        
-        print(f"✅ WB_AUTO_UPH Web Analysis completed successfully!")
-        
-        return {
-            'success': True,
-            'message': 'วิเคราะห์ข้อมูล Wire Bond สำเร็จ',
-            'output_file': output_filename,
-            'output_path': output_path,
-            'summary': {
-                'total_groups': total_groups,
-                'average_efficiency': round(avg_efficiency, 3),
-                'outliers_removed': total_outliers_removed,
-                'total_original_data': total_original_data,
-                'data_quality': round((1 - total_outliers_removed/total_original_data) * 100, 2) if total_original_data > 0 else 0,
-                'total_data_points': total_data_points
-            },
-            'wire_data_file': wire_data['filename'],
-            'uph_data_file': selected_uph_file
-        }
-        
-    except Exception as e:
-        print(f"❌ Error in WB_AUTO_UPH Web Analysis: {e}")
-        import traceback
-        print(f"🔍 Full traceback:")
-        print(traceback.format_exc())
-        return {
-            'success': False,
-            'error': f'เกิดข้อผิดพลาด: {str(e)}'
-        }
-        
 def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
     print(f"🚀 Starting WB_AUTO_UPH execution...")
     
@@ -898,87 +507,55 @@ def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
         else:
             raise Exception(f"Input directory does not exist: {input_dir}")
         
-        # ใช้ input_dir ที่ส่งมาจากระบบเว็บ (temporary directory)
+        # ใช้ input_dir ที่ส่งมาจากระบบเว็บ (temporary directory) สำหรับ UPH files
+        # Wire files จะอ่านจากโฟลเดอร์ data_wireWB
+        # ไฟล์ใดก็ตามที่อัปโหลดในเว็บของ Wire Bond คือไฟล์ UPH files
         if uph_filename and wire_filename:
             uph_file = os.path.join(input_dir, uph_filename)
-            wire_file = os.path.join(input_dir, wire_filename)
+            # Wire file ไม่ใช้จาก input_dir แต่จะหาจาก data_wireWB โดยอัตโนมัติ
+            wire_file = None  # จะให้ load_data หา wire file เอง
             print(f"   UPH File Path: {uph_file}")
-            print(f"   Wire File Path: {wire_file}")
+            print(f"   Wire File: Will auto-detect from data_wireWB folder")
         else:
             uph_file = None
             wire_file = None
             
-            # หาไฟล์ในโฟลเดอร์ input_dir แบบอัตโนมัติ
+            # หาไฟล์ UPH ในโฟลเดอร์ input_dir (ที่อัปโหลดมา)
+            # ไฟล์ใดก็ตามที่อัปโหลดมาคือไฟล์ UPH
             for fname in files_in_input:
-                print(f"   Checking file: {fname}")
-                fname_lower = fname.lower()
-                
-                # ตรวจสอบไฟล์ UPH (WB, UTL, UPH, Data)
-                if (('wb' in fname_lower or 'utl' in fname_lower or 'uph' in fname_lower or 'data' in fname_lower) 
-                    and fname_lower.endswith(('.xlsx', '.xls', '.csv')) 
-                    and 'wire' not in fname_lower and 'book' not in fname_lower):
+                if fname.lower().endswith(('.xlsx', '.xls', '.csv')):
                     uph_file = os.path.join(input_dir, fname)
-                    print(f"   ✅ Found UPH file: {uph_file}")
-                
-                # ตรวจสอบไฟล์ Wire (Wire, Book)
-                elif (('wire' in fname_lower or 'book' in fname_lower) 
-                      and fname_lower.endswith(('.xlsx', '.xls'))):
-                    wire_file = os.path.join(input_dir, fname)
-                    print(f"   ✅ Found Wire file: {wire_file}")
+                    print(f"   ✅ Using uploaded file as UPH file: {uph_file}")
+                    break  # หาเจอไฟล์แรกแล้วหยุด
             
-            # ถ้าหาไม่เจอแบบอัตโนมัติ ให้ใช้ไฟล์แรกที่เจอ
-            if not uph_file or not wire_file:
+            # Wire file จะให้ load_data หาจาก data_wireWB เอง
+            wire_file = None
+            
+            # ตรวจสอบว่าหา UPH file เจอหรือไม่
+            if not uph_file:
                 files_in_dir = [f for f in files_in_input if f.endswith(('.xlsx', '.xls', '.csv'))]
                 print(f"   Available files: {files_in_dir}")
                 
-                if len(files_in_dir) >= 2:
-                    # เอาไฟล์ที่มีขนาดใหญ่กว่าเป็น UPH file
-                    files_with_size = []
-                    for f in files_in_dir:
-                        file_path = os.path.join(input_dir, f)
-                        try:
-                            size = os.path.getsize(file_path)
-                            files_with_size.append((f, size))
-                        except:
-                            files_with_size.append((f, 0))
-                    
-                    # เรียงตามขนาดไฟล์
-                    files_with_size.sort(key=lambda x: x[1], reverse=True)
-                    
-                    if not uph_file:
-                        uph_file = os.path.join(input_dir, files_with_size[0][0])
-                        print(f"   📊 Auto-selected UPH file (largest): {files_with_size[0][0]}")
-                    
-                    if not wire_file:
-                        # หาไฟล์ที่ไม่ใช่ UPH file
-                        for fname, size in files_with_size:
-                            if fname != os.path.basename(uph_file):
-                                wire_file = os.path.join(input_dir, fname)
-                                print(f"   📊 Auto-selected Wire file: {fname}")
-                                break
+                if len(files_in_dir) >= 1:
+                    # เอาไฟล์แรกที่เจอเป็น UPH file (ไฟล์ใดก็ตามที่อัปโหลดมา)
+                    uph_file = os.path.join(input_dir, files_in_dir[0])
+                    print(f"   📊 Using first available file as UPH file: {files_in_dir[0]}")
         
-        # ตรวจสอบว่าพบไฟล์ครบหรือไม่
-        if not uph_file or not wire_file:
-            missing_files = []
-            if not uph_file:
-                missing_files.append("UPH data file")
-            if not wire_file:
-                missing_files.append("Wire data file")
-            
+        # ตรวจสอบว่าพบไฟล์ UPH หรือไม่
+        if not uph_file:
             available_files = [f for f in files_in_input if f.endswith(('.xlsx', '.xls', '.csv'))]
-            error_msg = f"ไม่พบไฟล์ที่จำเป็น: {', '.join(missing_files)}\nไฟล์ที่มีในโฟลเดอร์: {', '.join(available_files)}\nกรุณาตรวจสอบให้แน่ใจว่าอัปโหลดไฟล์ครบ 2 ไฟล์ (.xlsx หรือ .xls)"
+            error_msg = f"ไม่พบไฟล์ UPH ที่จำเป็น\nไฟล์ที่มีในโฟลเดอร์: {', '.join(available_files)}\nกรุณาตรวจสอบให้แน่ใจว่าอัปโหลดไฟล์ UPH (.xlsx, .xls หรือ .csv)"
             print(f"❌ {error_msg}")
             raise Exception(error_msg)
         
-        # ตรวจสอบว่าไฟล์มีอยู่จริง
+        # ตรวจสอบว่าไฟล์ UPH มีอยู่จริง
         if not os.path.exists(uph_file):
             raise Exception(f"ไม่พบไฟล์ UPH: {uph_file}")
-        if not os.path.exists(wire_file):
-            raise Exception(f"ไม่พบไฟล์ Wire Data: {wire_file}")
         
-        print(f"✅ Files validated successfully")
+        print(f"✅ UPH file validated successfully")
+        print(f"📋 Wire data will be loaded from data_wireWB folder automatically")
         
-        # โหลดข้อมูล
+        # โหลดข้อมูล (wire_file จะให้ load_data หาจาก data_wireWB เอง)
         print(f"📁 Loading data...")
         if not analyzer.load_data(uph_file, wire_file):
             raise Exception("โหลดข้อมูลไม่สำเร็จ")
