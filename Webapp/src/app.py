@@ -82,7 +82,7 @@ def method():
         elif input_method == "api":
             endpoint = request.form.get("endpoint")
             plant = request.form.get("plant")
-            year_quarter = request.form.get("year_quarter")
+            year_quarter = request.form.get("year_quarter")  # เช่น "2024Q1,2024Q2"
             api_operation = request.form.get("api_operation")
             bom_no = request.form.get("bom_no")
             session["endpoint"] = endpoint
@@ -90,39 +90,43 @@ def method():
             session["year_quarter"] = year_quarter
             session["api_operation"] = api_operation
             session["bom_no"] = bom_no
-            # สร้าง URL จาก base + endpoint
+
             api_url = f"{app.api_base_url}/{endpoint}"
-            params = {}
-            if plant: params["plant"] = plant
-            if year_quarter: params["year_quarter"] = year_quarter
-            if api_operation: params["operation"] = api_operation
-            if bom_no: params["bom_no"] = bom_no
-            try:
-                response = requests.get(api_url, params=params)
-                if response.status_code == 200:
-                    content_type = response.headers.get('Content-Type', '')
-                    if 'application/json' in content_type and response.text.strip():
-                        try:
-                            json_data = response.json()
-                        except Exception as e:
-                            flash(f"API ได้รับข้อมูลที่ไม่ใช่ JSON: {e} | ตัวอย่างข้อมูล: {response.text[:300]}", "error")
-                            return redirect(url_for("method", operation=operation))
-                        json_filename = f"api_{plant}_{year_quarter}_{api_operation}_{bom_no or 'none'}.json"
-                        json_path = os.path.join(temp_root, json_filename)
-                        with open(json_path, "w", encoding="utf-8") as f:
-                            json.dump(json_data, f, ensure_ascii=False)
-                        session["api_json_path"] = json_path
-                    else:
-                        if 'text/html' in content_type:
-                            flash(f"API ไม่ได้ส่งข้อมูล JSON แต่ส่ง HTML (Content-Type: text/html)\n\nกรุณาตรวจสอบ URL endpoint ว่าเป็น API จริง ไม่ใช่ Swagger UI หรือหน้าเว็บ และตรวจสอบสิทธิ์การเข้าถึง API ปลายทาง\n\nตัวอย่างข้อมูล: {response.text[:300]}", "error")
+            all_data = []
+            error_msgs = []
+            # แยก year_quarter เป็น list
+            yq_list = [y.strip() for y in year_quarter.split(",") if y.strip()]
+            for yq in yq_list:
+                params = {}
+                if plant: params["plant"] = plant
+                params["year_quarter"] = yq
+                if api_operation: params["operation"] = api_operation
+                if bom_no: params["bom_no"] = bom_no
+                try:
+                    response = requests.get(api_url, params=params)
+                    if response.status_code == 200:
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'application/json' in content_type and response.text.strip():
+                            try:
+                                json_data = response.json()
+                                all_data.extend(json_data if isinstance(json_data, list) else [json_data])
+                            except Exception as e:
+                                error_msgs.append(f"API {yq} ได้รับข้อมูลที่ไม่ใช่ JSON: {e}")
                         else:
-                            flash(f"API ไม่ได้ส่งข้อมูล JSON หรือข้อมูลว่างเปล่า | Content-Type: {content_type} | ตัวอย่างข้อมูล: {response.text[:300]}", "error")
-                        return redirect(url_for("method", operation=operation))
-                else:
-                    flash(f"API ดึงข้อมูลไม่สำเร็จ: {response.status_code}", "error")
-                    return redirect(url_for("method", operation=operation))
-            except Exception as e:
-                flash(f"API error: {e}", "error")
+                            error_msgs.append(f"API {yq} ไม่ได้ส่งข้อมูล JSON หรือข้อมูลว่างเปล่า")
+                    else:
+                        error_msgs.append(f"API {yq} ดึงข้อมูลไม่สำเร็จ: {response.status_code}")
+                except Exception as e:
+                    error_msgs.append(f"API {yq} error: {e}")
+
+            if all_data:
+                json_filename = f"api_{plant}_{year_quarter}_{api_operation}_{bom_no or 'none'}.json"
+                json_path = os.path.join(temp_root, json_filename)
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(all_data, f, ensure_ascii=False)
+                session["api_json_path"] = json_path
+            if error_msgs:
+                flash(" | ".join(error_msgs), "error")
                 return redirect(url_for("method", operation=operation))
 
         return redirect(url_for("function"))
