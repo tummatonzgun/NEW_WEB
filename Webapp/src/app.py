@@ -355,8 +355,8 @@ def download_result():
 
 if __name__ == "__main__":
     ip = socket.gethostbyname(socket.gethostname())
-    print(f"\n✅ Flask app is running on: http://{ip}:8080\n(เปิดจากเครื่องอื่นในเครือข่ายได้ด้วย IP นี้)\n")
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    print(f"\n✅ Flask app is running on: http://{ip}:80\n(เปิดจากเครื่องอื่นในเครือข่ายได้ด้วย IP นี้)\n")
+    app.run(debug=True, host='0.0.0.0', port=80)
 
 # ===== Version Information =====
 # version 3.0 - Fully Refactored with Service Classes and Modern Architecture

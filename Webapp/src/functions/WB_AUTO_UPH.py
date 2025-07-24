@@ -957,28 +957,44 @@ def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
     รองรับการรับไฟล์จากโฟลเดอร์ data_WB, data_MAP หรือ list ของไฟล์ UPH
     """
     try:
-        print(f"🚀 Starting WB_AUTO_UPH workflow...")
-        print(f"📁 Input: {input_path}")
-        print(f"📁 Output: {output_dir}")
-        if start_date and end_date:
-            print(f"🗓️ ช่วงวันที่ที่ประมวลผล: {start_date} ถึง {end_date}")
 
-        # ถ้า input_path เป็น list ให้ใช้ run_wb_auto_uph_web_multiple (ส่ง start_date, end_date)
+        # --- File selection logic ---
+        # 1. If input_path is a list: process all files in the list
         if isinstance(input_path, list):
-            result = run_wb_auto_uph_web_multiple(input_path, output_dir=output_dir)
-            if result.get("success"):
-                print(f"✅ WB_AUTO_UPH Multiple Files completed: {result['output_path']}")
-                return result["output_path"]
-            else:
-                raise Exception(result.get("error", "Unknown error"))
-        else:
-            # ถ้า input_path เป็นไฟล์ ให้ใช้โฟลเดอร์ของไฟล์นั้น
-            if os.path.isfile(input_path):
-                input_dir = os.path.dirname(input_path)
-                uph_filename = os.path.basename(input_path)
+            files = [f for f in input_path if os.path.isfile(f)]
+            if not files:
+                raise Exception("ไม่พบไฟล์ใน list")
+            result_paths = []
+            for f in files:
+                input_dir = os.path.dirname(f)
+                uph_filename = os.path.basename(f)
                 result_path = run(input_dir, output_dir, uph_filename=uph_filename, start_date=start_date, end_date=end_date)
-            else:
-                result_path = run(input_path, output_dir, start_date=start_date, end_date=end_date)
+                result_paths.append(result_path)
+            print(f"WB_AUTO_UPH completed. Output: {result_paths}")
+            return result_paths[0] if len(result_paths) == 1 else result_paths
+
+        # 2. If input_path is a directory, select the latest supported UPH file in that directory
+        if isinstance(input_path, str) and os.path.isdir(input_path):
+            all_files = [os.path.join(input_path, f) for f in os.listdir(input_path)]
+            uph_files = [f for f in all_files if os.path.isfile(f)
+                        and f.lower().endswith((".xlsx", ".xls", ".csv", ".json"))
+                        and ("wire" not in os.path.basename(f).lower() and "book" not in os.path.basename(f).lower())]
+            if not uph_files:
+                raise Exception("ไม่พบไฟล์ UPH ที่รองรับในโฟลเดอร์นี้")
+            latest_file = max(uph_files, key=os.path.getmtime)
+            input_path = latest_file
+
+        # 3. If input_path is a file, process it directly
+        if os.path.isfile(input_path):
+            input_dir = os.path.dirname(input_path)
+            uph_filename = os.path.basename(input_path)
+            result_path = run(input_dir, output_dir, uph_filename=uph_filename, start_date=start_date, end_date=end_date)
+            print(f"WB_AUTO_UPH completed. Output: {result_path}")
+            return result_path
+        else:
+            # If input_path is not a file (should not happen), try to run as directory (legacy fallback)
+            result_path = run(input_path, output_dir, start_date=start_date, end_date=end_date)
+            print(f"WB_AUTO_UPH completed. Output: {result_path}")
             return result_path
 
     except Exception as e:

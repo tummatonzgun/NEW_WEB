@@ -361,7 +361,7 @@ def calculate_group_average(df, start_date, end_date):
     uph_col = col_map.get('uph')
 
     # เลือกคอลัมน์ที่ต้องการแสดงในไฟล์ average
-    columns_to_keep = [bom_col, 'operation', model_col, uph_col]
+    columns_to_keep = [bom_col, 'operation', 'optn_code', model_col, uph_col]
 
     # คำนวณ mean เฉพาะ uph
     grouped = df.groupby([bom_col, model_col], as_index=False).agg({uph_col: 'mean'})
