@@ -366,6 +366,8 @@ def calculate_group_average(df, start_date, end_date):
     # คำนวณ mean เฉพาะ uph
     grouped = df.groupby([bom_col, model_col], as_index=False).agg({uph_col: 'mean'})
 
+    grouped[uph_col] = grouped[uph_col].round(3)  # ปัดเศษค่าเฉลี่ยให้เป็นทศนิยม 2 ตำแหน่ง
+
     # ดึงค่าแรกของคอลัมน์อื่นในแต่ละกลุ่ม
     other_cols = [c for c in columns_to_keep if c not in [bom_col, model_col, uph_col]]
     firsts = df.groupby([bom_col, model_col], as_index=False)[other_cols].first()

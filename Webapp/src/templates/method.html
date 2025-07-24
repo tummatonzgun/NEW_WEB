@@ -323,29 +323,36 @@
         }
     };
 
-document.querySelector('form.method-form').onsubmit = function (e) {
-    const fileInput = document.getElementById('fileInput');
-    const folderDropdown = document.getElementById('folderDropdown');
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form.method-form');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+        // Always show overlay immediately
+        var overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.style.display = '';
 
-    if (document.getElementById('upload').checked) {
-        if (!fileInput.value) {
+        // Validation logic
+        const uploadRadio = document.getElementById('upload');
+        const folderRadio = document.getElementById('folder');
+        const fileInput = document.getElementById('fileInput');
+        const folderDropdown = document.getElementById('folderDropdown');
+
+        // Only validate if element exists
+        if (uploadRadio && uploadRadio.checked && fileInput && !fileInput.value) {
             alert('กรุณาเลือกไฟล์ก่อน');
+            if (overlay) overlay.style.display = 'none';
             e.preventDefault();
             return false;
         }
-    }
-
-    if (document.getElementById('folder').checked) {
-        if (!folderDropdown.value) {
+        if (folderRadio && folderRadio.checked && folderDropdown && !folderDropdown.value) {
             alert('กรุณาเลือกไฟล์จากโฟลเดอร์ก่อน');
+            if (overlay) overlay.style.display = 'none';
             e.preventDefault();
             return false;
         }
-    }
-
-    // แสดง overlay loading
-    document.getElementById('loadingOverlay').style.display = '';
-};
+        // overlay will remain until page reloads
+    });
+});
     </script>
 </body>
 </html>

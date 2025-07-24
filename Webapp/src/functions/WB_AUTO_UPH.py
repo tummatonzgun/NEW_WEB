@@ -259,6 +259,7 @@ class WireBondingAnalyzer:
             df = df.dropna(subset=['uph', 'bom_no'])
             print("Rows after dropna:", len(df))
             if start_date and end_date:
+                print(f"\n📅 Filtering by date range: {start_date} ถึง {end_date}")
                 date_cols = [col for col in df.columns if 'date' in col or 'time' in col]
                 date_col = None
                 for col in date_cols:
@@ -269,11 +270,15 @@ class WireBondingAnalyzer:
                     except Exception:
                         continue
                 if date_col:
+                    before_filter = len(df)
                     df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
                     start_dt = pd.to_datetime(start_date)
                     end_dt = pd.to_datetime(end_date)
                     df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
-                    print("Rows after date filter:", len(df))
+                    after_filter = len(df)
+                    print(f"Rows after date filter: {after_filter} (filtered {before_filter - after_filter} rows)")
+                else:
+                    print("⚠️ ไม่พบคอลัมน์วันที่ที่ใช้กรองได้")
             df = self.clean_model_names(df)
             self.wb_data = df
             return True
@@ -285,6 +290,8 @@ class WireBondingAnalyzer:
         """คำนวณประสิทธิภาพการทำงาน (รองรับกรองช่วงวันที่)"""
         try:
             print(f"🔄 Starting calculate_efficiency...")
+            if start_date and end_date:
+                print(f"📅 กำลังประมวลผลข้อมูลช่วงวันที่: {start_date} ถึง {end_date}")
             if not self.preprocess_data(start_date=start_date, end_date=end_date):
                 print(f"❌ Preprocess data failed")
                 return None
@@ -831,119 +838,45 @@ def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
     print(f"🔍 WB_AUTO_UPH Debug Info:")
     print(f"   Input Dir: {input_dir}")
     print(f"   Output Dir: {output_dir}")
-    print(f"   UPH Filename: {uph_filename}")
-    print(f"   Wire Filename: {wire_filename}")
-    print(f"   Input Dir exists: {os.path.exists(input_dir)}")
     try:
-        if os.path.exists(input_dir):
-            files_in_input = os.listdir(input_dir)
-            print(f"   Files in input_dir: {files_in_input}")
-        else:
-            raise Exception(f"Input directory does not exist: {input_dir}")
-        
-        # ใช้ input_dir ที่ส่งมาจากระบบเว็บ (temporary directory)
-        if uph_filename and wire_filename:
-            uph_file = os.path.join(input_dir, uph_filename)
+        if not uph_filename:
+            raise Exception("ไม่ระบุชื่อไฟล์ UPH ที่ต้องการประมวลผล")
+        uph_file = os.path.join(input_dir, uph_filename)
+        if wire_filename:
             wire_file = os.path.join(input_dir, wire_filename)
-            print(f"   UPH File Path: {uph_file}")
-            print(f"   Wire File Path: {wire_file}")
         else:
-            uph_file = None
-            wire_file = None
-            
-            # หาไฟล์ในโฟลเดอร์ input_dir แบบอัตโนมัติ
-            for fname in files_in_input:
-                print(f"   Checking file: {fname}")
-                fname_lower = fname.lower()
-                
-                # ตรวจสอบไฟล์ UPH (WB, UTL, UPH, Data)
-                if (('wb' in fname_lower or 'utl' in fname_lower or 'uph' in fname_lower or 'data' in fname_lower) 
-                    and fname_lower.endswith(('.xlsx', '.xls', '.csv', '.json')) 
-                    and 'wire' not in fname_lower and 'book' not in fname_lower):
-                    uph_file = os.path.join(input_dir, fname)
-                    print(f"   ✅ Found UPH file: {uph_file}")
-                
-                # ตรวจสอบไฟล์ Wire (Wire, Book)
-                elif (('wire' in fname_lower or 'book' in fname_lower) 
-                      and fname_lower.endswith(('.xlsx', '.xls'))):
-                    wire_file = os.path.join(input_dir, fname)
-                    print(f"   ✅ Found Wire file: {wire_file}")
-            
-            # ถ้าหาไม่เจอ wire_file ใน input_dir ให้บังคับใช้ไฟล์ Wire Data ที่ถูกต้องจาก data_MAP
-            if not wire_file or not os.path.exists(wire_file):
-                print("⚠️ ไม่พบไฟล์ Wire Data ใน input_dir, กำลังใช้ไฟล์จาก data_MAP ...")
-                wire_file = r"C:\Users\41800558\Documents\GitHub\NEW_WEB\Webapp\src\data_MAP\Book6_Wire Data.xlsx"
-                if not os.path.exists(wire_file):
-                    print("❌ ไม่พบไฟล์ Wire Data ใน data_MAP เช่นกัน จะประมวลผลเฉพาะ UPH เท่านั้น")
-                    wire_file = None
-                else:
-                    print(f"✅ พบไฟล์ Wire Data ใน data_MAP: {wire_file}")
-        
-        # ตรวจสอบว่าพบไฟล์ครบหรือไม่
-        if not uph_file:
-            missing_files = ["UPH data file"]
-            available_files = [f for f in files_in_input if f.endswith(('.xlsx', '.xls', '.csv'))]
-            error_msg = f"ไม่พบไฟล์ที่จำเป็น: {', '.join(missing_files)}\nไฟล์ที่มีในโฟลเดอร์: {', '.join(available_files)}\nกรุณาตรวจสอบให้แน่ใจว่าอัปโหลดไฟล์ครบ 2 ไฟล์ (.xlsx หรือ .xls)"
-            print(f"❌ {error_msg}")
-            raise Exception(error_msg)
-
-        # ถ้าไม่พบ wire_file ใน input_dir ให้หาใน data_MAP
-        if not wire_file or not os.path.exists(wire_file):
-            print("⚠️ ไม่พบไฟล์ Wire Data ใน input_dir, กำลังค้นหาใน data_MAP ...")
+            # หาไฟล์ Wire Data จาก data_MAP
             wire_file = r"C:\Users\41800558\Documents\GitHub\NEW_WEB\Webapp\src\data_MAP\Book6_Wire Data.xlsx"
-            if not os.path.exists(wire_file):
-                print("❌ ไม่พบไฟล์ Wire Data ใน data_MAP เช่นกัน จะประมวลผลเฉพาะ UPH เท่านั้น")
-                wire_file = None
-            else:
-                print(f"✅ พบไฟล์ Wire Data ใน data_MAP: {wire_file}")
-        
-        # ตรวจสอบว่าไฟล์มีอยู่จริง
+        # ตรวจสอบไฟล์
         if not os.path.exists(uph_file):
             raise Exception(f"ไม่พบไฟล์ UPH: {uph_file}")
         if not os.path.exists(wire_file):
             raise Exception(f"ไม่พบไฟล์ Wire Data: {wire_file}")
-        
         print(f"✅ Files validated successfully")
-        
-        # โหลดข้อมูล
         print(f"📁 Loading data...")
         if not analyzer.load_data(uph_file, wire_file):
             raise Exception("โหลดข้อมูลไม่สำเร็จ")
-        
         print(f"📊 Data loaded successfully")
-        
-        # คำนวณประสิทธิภาพ (ส่ง start_date, end_date)
         print(f"⚡ Calculating efficiency...")
         efficiency_df = analyzer.calculate_efficiency(start_date=start_date, end_date=end_date)
         if efficiency_df is None or efficiency_df.empty:
             raise Exception("คำนวณประสิทธิภาพไม่สำเร็จ หรือไม่มีข้อมูลหลังจากประมวลผล")
-        
         print(f"✅ Efficiency calculation completed")
-        
-        # สร้างโฟลเดอร์ output
         print(f"📁 Creating output directory...")
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "WB_AUTO_UPH_RESULT.xlsx")
-        
         print(f"📄 Output path: {output_path}")
-        
-        # ส่งออกไฟล์
         print(f"💾 Exporting to Excel...")
         if not analyzer.export_to_excel(output_path):
             raise Exception("ส่งออกไฟล์ผลลัพธ์ไม่สำเร็จ - กรุณาตรวจสอบสิทธิ์การเขียนไฟล์หรือพื้นที่ดิสก์")
-        
-        # ตรวจสอบไฟล์ผลลัพธ์
         if not os.path.exists(output_path):
             raise Exception(f"ไฟล์ผลลัพธ์ไม่ถูกสร้าง: {output_path}")
-        
         file_size = os.path.getsize(output_path)
         if file_size == 0:
             raise Exception(f"ไฟล์ผลลัพธ์ว่างเปล่า: {output_path}")
-        
         print(f"✅ WB_AUTO_UPH completed successfully!")
         print(f"📄 Output file: {output_path} (size: {file_size} bytes)")
         return output_path
-        
     except Exception as e:
         print(f"❌ WB_AUTO_UPH failed: {str(e)}")
         import traceback
@@ -957,6 +890,7 @@ def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
     รองรับการรับไฟล์จากโฟลเดอร์ data_WB, data_MAP หรือ list ของไฟล์ UPH
     """
     try:
+
 
         # --- File selection logic ---
         # 1. If input_path is a list: process all files in the list
@@ -973,16 +907,9 @@ def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
             print(f"WB_AUTO_UPH completed. Output: {result_paths}")
             return result_paths[0] if len(result_paths) == 1 else result_paths
 
-        # 2. If input_path is a directory, select the latest supported UPH file in that directory
+        # 2. If input_path is a directory, raise an error (do not select any file automatically)
         if isinstance(input_path, str) and os.path.isdir(input_path):
-            all_files = [os.path.join(input_path, f) for f in os.listdir(input_path)]
-            uph_files = [f for f in all_files if os.path.isfile(f)
-                        and f.lower().endswith((".xlsx", ".xls", ".csv", ".json"))
-                        and ("wire" not in os.path.basename(f).lower() and "book" not in os.path.basename(f).lower())]
-            if not uph_files:
-                raise Exception("ไม่พบไฟล์ UPH ที่รองรับในโฟลเดอร์นี้")
-            latest_file = max(uph_files, key=os.path.getmtime)
-            input_path = latest_file
+            raise Exception("กรุณาเลือกไฟล์ที่ต้องการประมวลผล ไม่รองรับการเลือกโฟลเดอร์โดยตรง")
 
         # 3. If input_path is a file, process it directly
         if os.path.isfile(input_path):
@@ -992,10 +919,7 @@ def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
             print(f"WB_AUTO_UPH completed. Output: {result_path}")
             return result_path
         else:
-            # If input_path is not a file (should not happen), try to run as directory (legacy fallback)
-            result_path = run(input_path, output_dir, start_date=start_date, end_date=end_date)
-            print(f"WB_AUTO_UPH completed. Output: {result_path}")
-            return result_path
+            raise Exception("input_path ไม่ถูกต้อง: กรุณาระบุไฟล์หรือ list ของไฟล์เท่านั้น")
 
     except Exception as e:
         print(f"❌ WB_AUTO_UPH workflow failed: {str(e)}")
