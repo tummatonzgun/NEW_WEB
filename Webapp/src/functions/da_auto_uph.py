@@ -6,6 +6,9 @@ import json
 import requests
 from datetime import datetime
 from urllib.parse import urlparse
+import matplotlib.pyplot as plt
+import io
+import base64
 
 def load_data_from_source(source):
     """
@@ -130,16 +133,7 @@ def process_json_data(json_data):
     return df
 
 def load_data_with_config(source, config=None):
-    """
-    โหลดข้อมูลพร้อม configuration สำหรับ API
-    
-    Parameters:
-    source (str): ที่อยู่ของข้อมูล
-    config (dict): การตั้งค่าเพิ่มเติม เช่น headers, params, auth
-    
-    Returns:
-    pandas.DataFrame: ข้อมูลที่โหลดแล้ว
-    """
+
     try:
         parsed = urlparse(source)
         is_url = bool(parsed.netloc)
@@ -263,7 +257,7 @@ def remove_outliers_auto(df_model, max_iter=20):
     return current_df
 
 def remove_outliers(df):
-    """ตัด outliers ตามกลุ่ม BOM และ Machine Model"""
+    """ตัด outliers ตามกลุ่ม BOM และ Machine Model และเพิ่มคอลัมน์จำนวนข้อมูลก่อน/หลังตัด"""
     col_map = {col.lower(): col for col in df.columns}
     
     # หาคอลัมน์ Machine Model
@@ -284,18 +278,17 @@ def remove_outliers(df):
     else:
         raise KeyError("ไม่พบคอลัมน์ bom_no ในข้อมูล")
     
-    # รวมข้อมูลที่ผ่านการตัด outliers ตามกลุ่ม bom_no และ Machine Model
     result_dfs = []
     
-    # จัดกลุ่มตาม bom_no และ Machine Model
     for (bom_no, machine_model), group_df in df.groupby([bom_col, model_col]):
-        print(f"ประมวลผลกลุ่ม: BOM={bom_no}, Machine={machine_model}, จำนวนข้อมูล={len(group_df)}")
-        
-        # ตัด outliers สำหรับแต่ละกลุ่ม
+        before_count = len(group_df)
         cleaned_group = remove_outliers_auto(group_df)
+        after_count = len(cleaned_group)
+        # เพิ่มคอลัมน์ใหม่
+        cleaned_group['DataPoints_Before'] = before_count
+        cleaned_group['DataPoints_After'] = after_count
         result_dfs.append(cleaned_group)
     
-    # รวมผลลัพธ์ทั้งหมด
     return pd.concat(result_dfs, ignore_index=True)
 
 def time_series_analysis(df):
@@ -347,9 +340,6 @@ def get_date_range_auto(df):
     return min_date, max_date
 
 def filter_data_by_date(df, start_date, end_date):
-    """กรองข้อมูลตามช่วงวันที่ที่เลือก"""
-    print(f"\n=== กรองข้อมูลตามช่วงวันที่ {start_date} ถึง {end_date} ===")
-    
     # กรองข้อมูลตามช่วงวันที่
     filtered_df = df[df['date_time_start'].between(start_date, end_date)].copy()
     
@@ -371,7 +361,7 @@ def calculate_group_average(df, start_date, end_date):
     uph_col = col_map.get('uph')
 
     # เลือกคอลัมน์ที่ต้องการแสดงในไฟล์ average
-    columns_to_keep = [bom_col, 'operation', model_col, uph_col]  # เพิ่ม/ลดได้ตามต้องการ
+    columns_to_keep = [bom_col, 'operation', model_col, uph_col]
 
     # คำนวณ mean เฉพาะ uph
     grouped = df.groupby([bom_col, model_col], as_index=False).agg({uph_col: 'mean'})
@@ -380,8 +370,13 @@ def calculate_group_average(df, start_date, end_date):
     other_cols = [c for c in columns_to_keep if c not in [bom_col, model_col, uph_col]]
     firsts = df.groupby([bom_col, model_col], as_index=False)[other_cols].first()
 
-    # รวมกลับ
-    grouped_average = pd.merge(grouped, firsts, on=[bom_col, model_col], how='left')
+    # เพิ่ม DataPoints_Before/After (ใช้ค่าแรกในกลุ่ม)
+    if 'DataPoints_Before' in df.columns and 'DataPoints_After' in df.columns:
+        data_points = df.groupby([bom_col, model_col], as_index=False)[['DataPoints_Before', 'DataPoints_After']].first()
+        grouped_average = pd.merge(grouped, firsts, on=[bom_col, model_col], how='left')
+        grouped_average = pd.merge(grouped_average, data_points, on=[bom_col, model_col], how='left')
+    else:
+        grouped_average = pd.merge(grouped, firsts, on=[bom_col, model_col], how='left')
 
     print(f"\n=== ค่าเฉลี่ย UPH ตามกลุ่ม (ช่วงวันที่ {start_date} ถึง {end_date}) ===")
     print(grouped_average)

@@ -39,41 +39,12 @@ class WireBondingAnalyzer:
         return df
     
     def find_wire_data_file(self, directory_path=None):
-        """หาไฟล์ Wire Data ในโฟลเดอร์ data_wireWB (สำหรับเว็บ)"""
-        try:
-            # ใช้ path ตายตัวสำหรับ data_wireWB
-            if directory_path is None:
-                # หา path ของ data_wireWB จาก current directory
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                src_dir = os.path.dirname(current_dir)
-                wire_dir = os.path.join(src_dir, "data_MAP")
-            else:
-                wire_dir = directory_path
-            
-            if not os.path.exists(wire_dir):
-                print(f"Wire data directory not found: {wire_dir}")
-                return None
-            
-            wire_files = []
-            for filename in os.listdir(wire_dir):
-                if (filename.lower().endswith(('.xlsx', '.xls')) and 
-                    ('wire' in filename.lower() or 'book' in filename.lower())):
-                    wire_files.append(os.path.join(wire_dir, filename))
-            
-            if not wire_files:
-                print(f"No Wire data file found in: {wire_dir}")
-                return None
-            
-            if len(wire_files) > 1:
-                print(f"Multiple Wire files found: {[os.path.basename(f) for f in wire_files]}")
-                print(f"Using the first one: {os.path.basename(wire_files[0])}")
-            
-            print(f"🔗 Using Wire data file: {os.path.basename(wire_files[0])}")
-            return wire_files[0]
-        
-        except Exception as e:
-            print(f"Error finding Wire data file: {e}")
-            return None
+        # บังคับใช้ไฟล์ Wire Data ที่ถูกต้องจาก data_MAP
+        wire_data_path = r"C:\Users\41800558\Documents\GitHub\NEW_WEB\Webapp\src\data_MAP\Book6_Wire Data.xlsx"
+        if os.path.exists(wire_data_path):
+            return wire_data_path
+        print(f"❌ ไม่พบไฟล์ Wire Data ที่ path: {wire_data_path}")
+        return None
     
     def load_data(self, uph_path, wire_data_path=None):
         """โหลดข้อมูลที่จำเป็น (normalize columns to underscore style)"""
@@ -96,7 +67,22 @@ class WireBondingAnalyzer:
                     .str.replace(' ', '_')
                     .str.replace('-', '_')
                 )
+                # เพิ่ม mapping robust สำหรับ wire data
+                col_map = {}
+                for col in self.nobump_df.columns:
+                    norm = col.replace('_', '').replace(' ', '').lower()
+                    if norm in ['bomno', 'bom', 'bom_no']:
+                        col_map[col] = 'bom_no'
+                    elif norm in ['numberrequired', 'number_required']:
+                        col_map[col] = 'number_required'
+                    elif norm in ['nobump', 'no_bump']:
+                        col_map[col] = 'no_bump'
+                self.nobump_df.rename(columns=col_map, inplace=True)
+                # Clean BOM ให้เหมือนกับ UPH
+                if 'bom_no' in self.nobump_df.columns:
+                    self.nobump_df['bom_no'] = self.nobump_df['bom_no'].astype(str).str.strip().str.upper()
                 print(f"✅ Wire data loaded: {len(self.nobump_df)} rows, columns: {list(self.nobump_df.columns)}")
+                print("Wire data preview:", self.nobump_df.head())
             except Exception as e:
                 print(f"❌ Error loading Wire data: {e}")
                 return False
@@ -127,9 +113,13 @@ class WireBondingAnalyzer:
                     norm = col.replace('_', '').lower()
                     if norm in ['machinemodel', 'model']:
                         col_map[col] = 'machine_model'
-                    elif norm in ['bomno', 'bom']:
+                    elif norm in ['bomno', 'bom', 'bom_no']:
                         col_map[col] = 'bom_no'
-                    elif norm == 'uph':
+                    elif norm in ['numberrequired', 'number_required']:
+                        col_map[col] = 'number_required'
+                    elif norm in ['nobump', 'no_bump']:
+                        col_map[col] = 'no_bump'
+                    elif norm in ['uph']:
                         col_map[col] = 'uph'
                     elif norm in ['optncode', 'optn_code']:
                         col_map[col] = 'optn_code'
@@ -310,18 +300,18 @@ class WireBondingAnalyzer:
             results = []
             print(f"📊 Processing {len(grouped)} groups...")
             for i, ((bom_no, model), group) in enumerate(grouped):
-                try:
+                if i < 5:
                     print(f"🔍 Processing group {i+1}/{len(grouped)}: BOM={bom_no}, Model={model}")
+                    print(f"   📈 Mean UPH: {group['uph'].mean():.2f}, Count: {len(group)}")
+                    print(f"   🔌 Wire Per Unit: {self.calculate_wire_per_unit(bom_no):.2f}")
+                try:
                     # คำนวณค่าเฉลี่ย UPH
                     mean_uph = group['uph'].mean()
                     count = len(group)
-                    print(f"   📈 Mean UPH: {mean_uph:.2f}, Count: {count}")
                     # คำนวณ Wire Per Unit
                     wire_per_unit = self.calculate_wire_per_unit(bom_no)
-                    print(f"   🔌 Wire Per Unit: {wire_per_unit:.2f}")
                     # คำนวณประสิทธิภาพ (UPH)
                     efficiency = mean_uph / wire_per_unit if wire_per_unit > 0 else 0
-                    print(f"   ⚡ Efficiency (UPH): {efficiency:.3f}")
                     # ดึงข้อมูลเพิ่มเติม
                     operation = group['operation'].iloc[0] if 'operation' in group.columns else 'N/A'
                     optn_code = group['optn_code'].iloc[0] if 'optn_code' in group.columns else 'N/A'
@@ -344,7 +334,6 @@ class WireBondingAnalyzer:
                         'Outliers_Removed': outlier_data['removed_count']
                     }
                     results.append(result_entry)
-                    print(f"   ✅ Group processed successfully")
                 except Exception as group_error:
                     print(f"   ❌ Error processing group {bom_no}-{model}: {group_error}")
                     continue
@@ -516,23 +505,15 @@ def get_available_uph_files():
 def get_wire_data_file():
     """ดึง path ของไฟล์ Wire Data จากโฟลเดอร์ data_MAP สำหรับเว็บ"""
     try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        src_dir = os.path.dirname(current_dir)
-        wire_dir = os.path.join(src_dir, "data_MAP")  # <-- เปลี่ยนตรงนี้
-
-        if not os.path.exists(wire_dir):
-            return None
-
-        for filename in os.listdir(wire_dir):
-            if (filename.lower().endswith(('.xlsx', '.xls')) and 
-                ('wire' in filename.lower() or 'book' in filename.lower())):
-                return {
-                    'filename': filename,
-                    'filepath': os.path.join(wire_dir, filename)
-                }
-
+        # ระบุ path ตรงไปยังไฟล์ Wire Data ที่ถูกต้อง
+        wire_data_path = r"C:\Users\41800558\Documents\GitHub\NEW_WEB\Webapp\src\data_MAP\Book6_Wire Data.xlsx"
+        if os.path.exists(wire_data_path):
+            return {
+                'filename': os.path.basename(wire_data_path),
+                'filepath': wire_data_path
+            }
+        print(f"❌ ไม่พบไฟล์ Wire Data ที่ path: {wire_data_path}")
         return None
-
     except Exception as e:
         print(f"Error getting Wire data file: {e}")
         return None
@@ -562,7 +543,7 @@ def run_wb_auto_uph_web_multiple(selected_uph_files, output_filename=None, outpu
         if not wire_data:
             return {
                 'success': False,
-                'error': 'ไม่พบไฟล์ Wire Data ในโฟลเดอร์ data_wireWB'
+                'error': 'ไม่พบไฟล์ Wire Data ที่ path ที่กำหนด'
             }
         current_dir = os.path.dirname(os.path.abspath(__file__))
         src_dir = os.path.dirname(current_dir)
@@ -591,7 +572,14 @@ def run_wb_auto_uph_web_multiple(selected_uph_files, output_filename=None, outpu
         for i, (uph_path, selected_file) in enumerate(zip(uph_paths, selected_uph_files)):
             print(f"\n🔄 Processing file {i+1}/{len(selected_uph_files)}: {selected_file}")
             analyzer = WireBondingAnalyzer()
-            if not analyzer.load_data(uph_path, wire_data['filepath']):
+            # ใช้ไฟล์ Wire Data ที่ถูกต้องจาก get_wire_data_file
+            wire_data_path = wire_data['filepath']
+            if not wire_data_path or not os.path.exists(wire_data_path):
+                return {
+                    'success': False,
+                    'error': 'ไม่พบไฟล์ Wire Data ที่ path ที่กำหนด'
+                }
+            if not analyzer.load_data(uph_path, wire_data_path):
                 print(f"⚠️ Warning: Could not load data from {selected_file}, skipping...")
                 continue
             # ส่ง start_date, end_date ให้ calculate_efficiency
@@ -727,7 +715,7 @@ def run_wb_auto_uph_web(selected_uph_file, output_filename=None):
         if not wire_data:
             return {
                 'success': False,
-                'error': 'ไม่พบไฟล์ Wire Data ในโฟลเดอร์ data_wireWB'
+                'error': 'ไม่พบไฟล์ Wire Data ที่ path ที่กำหนด'
             }
         
         # หา path ของไฟล์ UPH ที่เลือก
@@ -870,7 +858,7 @@ def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
                 
                 # ตรวจสอบไฟล์ UPH (WB, UTL, UPH, Data)
                 if (('wb' in fname_lower or 'utl' in fname_lower or 'uph' in fname_lower or 'data' in fname_lower) 
-                    and fname_lower.endswith(('.xlsx', '.xls', '.csv')) 
+                    and fname_lower.endswith(('.xlsx', '.xls', '.csv', '.json')) 
                     and 'wire' not in fname_lower and 'book' not in fname_lower):
                     uph_file = os.path.join(input_dir, fname)
                     print(f"   ✅ Found UPH file: {uph_file}")
@@ -881,36 +869,15 @@ def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
                     wire_file = os.path.join(input_dir, fname)
                     print(f"   ✅ Found Wire file: {wire_file}")
             
-            # ถ้าหาไม่เจอแบบอัตโนมัติ ให้ใช้ไฟล์แรกที่เจอ
-            if not uph_file or not wire_file:
-                files_in_dir = [f for f in files_in_input if f.endswith(('.xlsx', '.xls', '.csv'))]
-                print(f"   Available files: {files_in_dir}")
-                
-                if len(files_in_dir) >= 2:
-                    # เอาไฟล์ที่มีขนาดใหญ่กว่าเป็น UPH file
-                    files_with_size = []
-                    for f in files_in_dir:
-                        file_path = os.path.join(input_dir, f)
-                        try:
-                            size = os.path.getsize(file_path)
-                            files_with_size.append((f, size))
-                        except:
-                            files_with_size.append((f, 0))
-                    
-                    # เรียงตามขนาดไฟล์
-                    files_with_size.sort(key=lambda x: x[1], reverse=True)
-                    
-                    if not uph_file:
-                        uph_file = os.path.join(input_dir, files_with_size[0][0])
-                        print(f"   📊 Auto-selected UPH file (largest): {files_with_size[0][0]}")
-                    
-                    if not wire_file:
-                        # หาไฟล์ที่ไม่ใช่ UPH file
-                        for fname, size in files_with_size:
-                            if fname != os.path.basename(uph_file):
-                                wire_file = os.path.join(input_dir, fname)
-                                print(f"   📊 Auto-selected Wire file: {fname}")
-                                break
+            # ถ้าหาไม่เจอ wire_file ใน input_dir ให้บังคับใช้ไฟล์ Wire Data ที่ถูกต้องจาก data_MAP
+            if not wire_file or not os.path.exists(wire_file):
+                print("⚠️ ไม่พบไฟล์ Wire Data ใน input_dir, กำลังใช้ไฟล์จาก data_MAP ...")
+                wire_file = r"C:\Users\41800558\Documents\GitHub\NEW_WEB\Webapp\src\data_MAP\Book6_Wire Data.xlsx"
+                if not os.path.exists(wire_file):
+                    print("❌ ไม่พบไฟล์ Wire Data ใน data_MAP เช่นกัน จะประมวลผลเฉพาะ UPH เท่านั้น")
+                    wire_file = None
+                else:
+                    print(f"✅ พบไฟล์ Wire Data ใน data_MAP: {wire_file}")
         
         # ตรวจสอบว่าพบไฟล์ครบหรือไม่
         if not uph_file:
@@ -923,9 +890,8 @@ def run(input_dir, output_dir, uph_filename=None, wire_filename=None, **kwargs):
         # ถ้าไม่พบ wire_file ใน input_dir ให้หาใน data_MAP
         if not wire_file or not os.path.exists(wire_file):
             print("⚠️ ไม่พบไฟล์ Wire Data ใน input_dir, กำลังค้นหาใน data_MAP ...")
-            analyzer_tmp = WireBondingAnalyzer()
-            wire_file = analyzer_tmp.find_wire_data_file()
-            if not wire_file or not os.path.exists(wire_file):
+            wire_file = r"C:\Users\41800558\Documents\GitHub\NEW_WEB\Webapp\src\data_MAP\Book6_Wire Data.xlsx"
+            if not os.path.exists(wire_file):
                 print("❌ ไม่พบไฟล์ Wire Data ใน data_MAP เช่นกัน จะประมวลผลเฉพาะ UPH เท่านั้น")
                 wire_file = None
             else:
