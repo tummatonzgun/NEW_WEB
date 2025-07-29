@@ -141,7 +141,8 @@ def method():
     }
     folder_name = operation_folder_map.get(operation, "")
     folder_list = []
-    show_api = operation not in ["Singulation", "Pick & Place"]  # แสดง API เฉพาะบาง operation
+    show_process_all_in_folder = operation in ["Singulation", "Pick & Place"]  # แสดงปุ่มประมวลผลทั้งโฟลเดอร์เฉพาะบาง operation
+    show_api = operation in ["Die Attach", "Wire Bond"]  # แสดง API เฉพาะบาง operation
     if folder_name:
         # เดิม: folder_root = os.path.join(os.getcwd(), folder_name)
         # แก้เป็น:
@@ -150,7 +151,7 @@ def method():
             folder_list = [f for f in os.listdir(folder_root) if os.path.isfile(os.path.join(folder_root, f))]
     print("DEBUG folder_root:", folder_root)
     print("DEBUG folder_list:", folder_list)
-    return render_template("method.html", operation=operation, folder_root=folder_name, folder_list=folder_list, show_api=show_api)
+    return render_template("method.html", operation=operation, folder_root=folder_name, folder_list=folder_list, show_api=show_api, show_process_all_in_folder=show_process_all_in_folder)
 
 @app.route("/function", methods=["GET", "POST"])
 def function():

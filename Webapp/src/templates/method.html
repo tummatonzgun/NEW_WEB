@@ -180,7 +180,7 @@
         <!-- Section: เลือกไฟล์จากโฟลเดอร์ -->
         <div id="folderSection" class="input-section" style="display:none;">
             <label for="folderDropdown" class="form-label">เลือกไฟล์จากโฟลเดอร์</label>
-            <select id="folderDropdown" name="selected_folder" class="form-control">
+            <select id="folderDropdown" name="selected_folder[]" class="form-control" multiple size="8">
                 <option value="">-- กรุณาเลือกไฟล์ --</option>
                 {% for file in folder_list %}
                     <option value="{{ file }}">{{ file }}</option>
@@ -219,9 +219,13 @@
             <pre id="apiResult" style="background:#222; color:#fff; padding:1em; border-radius:8px; min-height:80px;"></pre>
         </div>
         {% endif %}
-
+        
         <input type="hidden" name="operation" value="{{ operation }}">
-        <button type="submit" class="btn-method-next" style="background-color: #28a745;">ประมวลผลทั้งโฟลเดอร์</button>
+        {% if show_process_all_in_folder %}
+        <button type="submit" class="btn-method-next" id="btn-process-folder" name="process_folder" value="1" style="background-color: #28a745;">
+            ประมวลผลทั้งโฟลเดอร์
+        </button>
+        {% endif %}
         <button type="submit" class="btn-method-next">ถัดไป</button>
         <a href="{{ url_for('operation') }}" class="btn-method-next" style="background:#888; margin-top:10px; display:block; text-align:center; text-decoration:none;">
             ย้อนกลับ
@@ -253,8 +257,8 @@
     </div>
 
     <script>
-
     document.addEventListener('DOMContentLoaded', function() {
+        // --- Section toggle ---
         const uploadRadio = document.getElementById('upload');
         const folderRadio = document.getElementById('folder');
         const apiRadio = document.getElementById('api');
@@ -270,7 +274,6 @@
             if (apiSection) {
                 if (apiRadio) {
                     apiSection.style.display = apiRadio.checked ? '' : 'none';
-                    // เฉพาะถ้ามี input เหล่านี้จริง
                     const plant = document.getElementById('plant');
                     const year_quarter = document.getElementById('year_quarter');
                     const api_operation = document.getElementById('api_operation');
@@ -289,64 +292,33 @@
         if (apiRadio) {
             apiRadio.addEventListener('change', toggleSections);
         }
-
-        // Initial call to set the correct section visible
         toggleSections();
-    });
 
-    const testApiBtn = document.getElementById('testApiBtn');
-    if (testApiBtn) {
-        testApiBtn.onclick = async function() {
-            // เก็บค่าจาก input
-            const endpoint = document.getElementById('endpoint').value;
-            const plant = document.getElementById('plant').value;
-            const year_quarter = document.getElementById('year_quarter').value;
-            const api_operation = document.getElementById('api_operation').value;
-            const bom_no = document.getElementById('bom_no').value;
-
-            // สร้าง query string
-            const params = new URLSearchParams({
-                endpoint,
-                plant,
-                year_quarter,
-                operation: api_operation,
-                bom_no
-            }).toString();
-
-            const resultBox = document.getElementById('apiResult');
-            resultBox.textContent = "Loading...";
-            try {
-                const res = await fetch('/api/?' + params);
-                let data;
-                try {
-                    data = await res.json();
-                } catch {
-                    resultBox.textContent = "API ไม่ได้ส่งข้อมูล JSON";
-                    return;
+        // --- เลือกไฟล์ทั้งหมดเมื่อกดปุ่มประมวลผลทั้งโฟลเดอร์ ---
+        const processFolderBtn = document.getElementById('btn-process-folder');
+        const folderDropdown = document.getElementById('folderDropdown');
+        if (processFolderBtn) {
+            processFolderBtn.addEventListener('click', function(e) {
+                if (folderRadio) folderRadio.checked = true;
+                if (folderDropdown && folderDropdown.options.length > 0) {
+                    for (let i = 0; i < folderDropdown.options.length; i++) {
+                        if (folderDropdown.options[i].value) {
+                            folderDropdown.options[i].selected = true;
+                        }
+                    }
                 }
-                resultBox.textContent = JSON.stringify(data, null, 2);
-            } catch (err) {
-                resultBox.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ API: " + err;
-            }
-        };
-    }
+                toggleSections(); // ให้ section โฟลเดอร์แสดง
+            });
+        }
 
-    document.addEventListener('DOMContentLoaded', function() {
+        // --- Validation ก่อน submit ---
         const form = document.querySelector('form.method-form');
         if (!form) return;
         form.addEventListener('submit', function(e) {
             var overlay = document.getElementById('loadingOverlay');
             if (overlay) overlay.style.display = '';
 
-            const uploadRadio = document.getElementById('upload');
-            const folderRadio = document.getElementById('folder');
             const fileInput = document.getElementById('fileInput');
-            const folderDropdown = document.getElementById('folderDropdown');
-
-            // DEBUG: log ค่า
-            console.log('uploadRadio.checked:', uploadRadio && uploadRadio.checked);
-            console.log('fileInput.value:', fileInput && fileInput.value);
-            console.log('fileInput.files.length:', fileInput && fileInput.files.length);
 
             if (uploadRadio && uploadRadio.checked && fileInput && (!fileInput.value || fileInput.files.length === 0)) {
                 alert('กรุณาเลือกไฟล์ก่อน');
@@ -361,6 +333,42 @@
                 return false;
             }
         });
+
+        // --- API Test Button ---
+        const testApiBtn = document.getElementById('testApiBtn');
+        if (testApiBtn) {
+            testApiBtn.onclick = async function() {
+                const endpoint = document.getElementById('endpoint').value;
+                const plant = document.getElementById('plant').value;
+                const year_quarter = document.getElementById('year_quarter').value;
+                const api_operation = document.getElementById('api_operation').value;
+                const bom_no = document.getElementById('bom_no').value;
+
+                const params = new URLSearchParams({
+                    endpoint,
+                    plant,
+                    year_quarter,
+                    operation: api_operation,
+                    bom_no
+                }).toString();
+
+                const resultBox = document.getElementById('apiResult');
+                resultBox.textContent = "Loading...";
+                try {
+                    const res = await fetch('/api/?' + params);
+                    let data;
+                    try {
+                        data = await res.json();
+                    } catch {
+                        resultBox.textContent = "API ไม่ได้ส่งข้อมูล JSON";
+                        return;
+                    }
+                    resultBox.textContent = JSON.stringify(data, null, 2);
+                } catch (err) {
+                    resultBox.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ API: " + err;
+                }
+            };
+        }
     });
     </script>
 </body>
