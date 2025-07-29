@@ -177,9 +177,8 @@ def run_all_years(input_path_or_file, output_dir):
     
     return output_file  # เปลี่ยนจาก return summary_df เป็น return output_file
 
-# ✅ เก็บฟังก์ชัน lookup_last_type ไว้เพื่อใช้กับเว็บ
-def lookup_last_type(input_bom_file, output_dir):
-    # โหลดไฟล์ Last_Type.xlsx
+def bom_type(input_bom_file, output_dir):
+    
     last_type_path = os.path.join(output_dir, "Last_Type.xlsx")
     if not os.path.exists(last_type_path):
         print(f"❌ ไม่พบไฟล์ {last_type_path}")
@@ -189,7 +188,6 @@ def lookup_last_type(input_bom_file, output_dir):
     # เลือกเฉพาะคอลัมน์ที่จำเป็น - ✅ ปรับให้ใช้กับโครงสร้างใหม่
     cols = ['bom_no', 'assy_pack_type']  # ใช้ assy_pack_type แทน Last_type
     df_last = df_last[cols].drop_duplicates()
-    df_last.rename(columns={'assy_pack_type': 'Last_type'}, inplace=True)  # เปลี่ยนชื่อคอลัมน์
 
     # โหลดไฟล์ bom_no ที่อัปโหลด
     df_bom = pd.read_excel(input_bom_file) if input_bom_file.endswith('.xlsx') else pd.read_csv(input_bom_file)

@@ -222,8 +222,8 @@ def function():
         session["current_file"] = file_path
         session["operation"] = operation
         session["func_name"] = func_name
-        session["start_date"] = start_date      # <--- เพิ่ม
-        session["end_date"] = end_date          # <--- เพิ่ม
+        session["start_date"] = start_date      
+        session["end_date"] = end_date          
         return redirect(url_for("result"))
 
     # GET: render หน้าเลือกฟังก์ชัน (เพิ่ม preview date range)
