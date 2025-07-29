@@ -143,15 +143,6 @@
 </head>
 <body>
     <h2>Operation: {{ operation }}</h2>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul style="color: red; margin-bottom: 18px;">
-          {% for category, message in messages %}
-            <li>{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
     <h3>Method</h3>
     <form method="post" action="{{ url_for('method') }}" enctype="multipart/form-data" class="method-form">
         <div class="method-radio-group">
@@ -230,6 +221,7 @@
         {% endif %}
 
         <input type="hidden" name="operation" value="{{ operation }}">
+        <button type="submit" class="btn-method-next" style="background-color: #28a745;">ประมวลผลทั้งโฟลเดอร์</button>
         <button type="submit" class="btn-method-next">ถัดไป</button>
         <a href="{{ url_for('operation') }}" class="btn-method-next" style="background:#888; margin-top:10px; display:block; text-align:center; text-decoration:none;">
             ย้อนกลับ
@@ -271,88 +263,105 @@
         const apiSection = document.getElementById('apiInputSection');
 
         function toggleSections() {
-            uploadSection.style.display = uploadRadio.checked ? '' : 'none';
-            folderSection.style.display = folderRadio.checked ? '' : 'none';
-            apiSection.style.display = apiRadio.checked ? '' : 'none';
-
-            // toggle required เฉพาะตอนเลือก API
-            document.getElementById('plant').required = apiRadio.checked;
-            document.getElementById('year_quarter').required = apiRadio.checked;
-            document.getElementById('api_operation').required = apiRadio.checked;
+            if (uploadRadio && uploadSection)
+                uploadSection.style.display = uploadRadio.checked ? '' : 'none';
+            if (folderRadio && folderSection)
+                folderSection.style.display = folderRadio.checked ? '' : 'none';
+            if (apiSection) {
+                if (apiRadio) {
+                    apiSection.style.display = apiRadio.checked ? '' : 'none';
+                    // เฉพาะถ้ามี input เหล่านี้จริง
+                    const plant = document.getElementById('plant');
+                    const year_quarter = document.getElementById('year_quarter');
+                    const api_operation = document.getElementById('api_operation');
+                    if (plant) plant.required = apiRadio.checked;
+                    if (year_quarter) year_quarter.required = apiRadio.checked;
+                    if (api_operation) api_operation.required = apiRadio.checked;
+                } else {
+                    apiSection.style.display = 'none';
+                }
+            }
         }
 
-        [uploadRadio, folderRadio, apiRadio].forEach(radio => {
-            radio.addEventListener('change', toggleSections);
+        [uploadRadio, folderRadio].forEach(radio => {
+            if (radio) radio.addEventListener('change', toggleSections);
         });
+        if (apiRadio) {
+            apiRadio.addEventListener('change', toggleSections);
+        }
 
         // Initial call to set the correct section visible
         toggleSections();
     });
 
-    document.getElementById('testApiBtn').onclick = async function() {
-        // เก็บค่าจาก input
-        const endpoint = document.getElementById('endpoint').value;
-        const plant = document.getElementById('plant').value;
-        const year_quarter = document.getElementById('year_quarter').value;
-        const api_operation = document.getElementById('api_operation').value;
-        const bom_no = document.getElementById('bom_no').value;
+    const testApiBtn = document.getElementById('testApiBtn');
+    if (testApiBtn) {
+        testApiBtn.onclick = async function() {
+            // เก็บค่าจาก input
+            const endpoint = document.getElementById('endpoint').value;
+            const plant = document.getElementById('plant').value;
+            const year_quarter = document.getElementById('year_quarter').value;
+            const api_operation = document.getElementById('api_operation').value;
+            const bom_no = document.getElementById('bom_no').value;
 
-        // สร้าง query string
-        const params = new URLSearchParams({
-            endpoint,
-            plant,
-            year_quarter,
-            operation: api_operation,
-            bom_no
-        }).toString();
+            // สร้าง query string
+            const params = new URLSearchParams({
+                endpoint,
+                plant,
+                year_quarter,
+                operation: api_operation,
+                bom_no
+            }).toString();
 
-        const resultBox = document.getElementById('apiResult');
-        resultBox.textContent = "Loading...";
-        try {
-            const res = await fetch('/api/?' + params);
-            let data;
+            const resultBox = document.getElementById('apiResult');
+            resultBox.textContent = "Loading...";
             try {
-                data = await res.json();
-            } catch {
-                resultBox.textContent = "API ไม่ได้ส่งข้อมูล JSON";
-                return;
+                const res = await fetch('/api/?' + params);
+                let data;
+                try {
+                    data = await res.json();
+                } catch {
+                    resultBox.textContent = "API ไม่ได้ส่งข้อมูล JSON";
+                    return;
+                }
+                resultBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                resultBox.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ API: " + err;
             }
-            resultBox.textContent = JSON.stringify(data, null, 2);
-        } catch (err) {
-            resultBox.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ API: " + err;
-        }
-    };
+        };
+    }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form.method-form');
-    if (!form) return;
-    form.addEventListener('submit', function(e) {
-        // Always show overlay immediately
-        var overlay = document.getElementById('loadingOverlay');
-        if (overlay) overlay.style.display = '';
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form.method-form');
+        if (!form) return;
+        form.addEventListener('submit', function(e) {
+            var overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.style.display = '';
 
-        // Validation logic
-        const uploadRadio = document.getElementById('upload');
-        const folderRadio = document.getElementById('folder');
-        const fileInput = document.getElementById('fileInput');
-        const folderDropdown = document.getElementById('folderDropdown');
+            const uploadRadio = document.getElementById('upload');
+            const folderRadio = document.getElementById('folder');
+            const fileInput = document.getElementById('fileInput');
+            const folderDropdown = document.getElementById('folderDropdown');
 
-        // Only validate if element exists
-        if (uploadRadio && uploadRadio.checked && fileInput && !fileInput.value) {
-            alert('กรุณาเลือกไฟล์ก่อน');
-            if (overlay) overlay.style.display = 'none';
-            e.preventDefault();
-            return false;
-        }
-        if (folderRadio && folderRadio.checked && folderDropdown && !folderDropdown.value) {
-            alert('กรุณาเลือกไฟล์จากโฟลเดอร์ก่อน');
-            if (overlay) overlay.style.display = 'none';
-            e.preventDefault();
-            return false;
-        }
-        // overlay will remain until page reloads
+            // DEBUG: log ค่า
+            console.log('uploadRadio.checked:', uploadRadio && uploadRadio.checked);
+            console.log('fileInput.value:', fileInput && fileInput.value);
+            console.log('fileInput.files.length:', fileInput && fileInput.files.length);
+
+            if (uploadRadio && uploadRadio.checked && fileInput && (!fileInput.value || fileInput.files.length === 0)) {
+                alert('กรุณาเลือกไฟล์ก่อน');
+                if (overlay) overlay.style.display = 'none';
+                e.preventDefault();
+                return false;
+            }
+            if (folderRadio && folderRadio.checked && folderDropdown && (!folderDropdown.value || folderDropdown.selectedOptions.length === 0)) {
+                alert('กรุณาเลือกไฟล์จากโฟลเดอร์ก่อน');
+                if (overlay) overlay.style.display = 'none';
+                e.preventDefault();
+                return false;
+            }
+        });
     });
-});
     </script>
 </body>
 </html>
