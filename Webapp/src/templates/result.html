@@ -81,26 +81,26 @@
     </style>
 </head>
 <body>
+    
     <div class="container">
         <h2>ผลลัพธ์การประมวลผล</h2>
+        <div class="btn-group">
+            <a href="{{ url_for('operation') }}" class="btn btn-secondary">กลับหน้าเลือก Operation</a>
+            <a href="{{ url_for('function') }}" class="btn">ประมวลผลใหม่</a>
+            {% if session.export_file_path %}
+                <a href="{{ url_for('download_result') }}" class="btn">ดาวน์โหลดผลลัพธ์</a>
+            {% endif %}
+        </div>
         <div class="info">
             <b>Operation:</b> {{ operation }}<br>
             <b>Function:</b> {{ func_name }}<br>
-            <b>ไฟล์ที่ประมวลผล:</b> 
-            {% if current_file %}
-                {% if current_file is iterable and not current_file|string %}
-                    {% for f in current_file %}
-                        <span>{{ f }}</span>{% if not loop.last %}, {% endif %}
-                    {% endfor %}
-                {% else %}
-                    <span>{{ current_file }}</span>
-                {% endif %}
-            {% endif %}
-            <br>
+
+            {% if show_api %}
             {% if start_date and end_date %}
                 <b>ช่วงวันที่ประมวลผล:</b> {{ start_date }} ถึง {{ end_date }}
             {% else %}
                 <b>ช่วงวันที่ประมวลผล:</b> ทั้งหมด
+            {% endif %}
             {% endif %}
         </div>
 

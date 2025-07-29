@@ -11,9 +11,8 @@ def run_all_years(input_path_or_file, output_dir):
         all_files = [input_path_or_file]
     else:
         all_files = glob.glob(os.path.join(input_path_or_file, "WF size* (UTL1).*"))
-    target_years = [2023, 2024, 2025, 2026, 2027]
-    print(f"กำลังประมวลผลไฟล์จาก {input_path_or_file} สำหรับปี {target_years}")
-    # หาไฟล์ทั้งหมดที่ตรงชื่อ
+    # ไม่ต้องมี target_years
+    print(f"กำลังประมวลผลไฟล์จาก {input_path_or_file}")
     print(f"เจอไฟล์ทั้งหมด {len(all_files)} ไฟล์")
 
     # แยกไฟล์ตามปี
@@ -23,8 +22,7 @@ def run_all_years(input_path_or_file, output_dir):
         match = re.search(r"'(\d{2})", filename)
         if match:
             file_year = 2000 + int(match.group(1))
-            if file_year in target_years:
-                files_by_year.setdefault(file_year, []).append(filepath)
+            files_by_year.setdefault(file_year, []).append(filepath)
         else:
             print(f"⚠️ ไฟล์ {filename} ไม่มีปีในชื่อ")
 
@@ -176,32 +174,6 @@ def run_all_years(input_path_or_file, output_dir):
     print(f"📈 รวมทั้งหมด: {len(summary_df)} รายการ")
     
     return output_file  # เปลี่ยนจาก return summary_df เป็น return output_file
-
-def bom_type(input_bom_file, output_dir):
-    
-    last_type_path = os.path.join(output_dir, "Last_Type.xlsx")
-    if not os.path.exists(last_type_path):
-        print(f"❌ ไม่พบไฟล์ {last_type_path}")
-        return
-
-    df_last = pd.read_excel(last_type_path)
-    # เลือกเฉพาะคอลัมน์ที่จำเป็น - ✅ ปรับให้ใช้กับโครงสร้างใหม่
-    cols = ['bom_no', 'assy_pack_type']  # ใช้ assy_pack_type แทน Last_type
-    df_last = df_last[cols].drop_duplicates()
-
-    # โหลดไฟล์ bom_no ที่อัปโหลด
-    df_bom = pd.read_excel(input_bom_file) if input_bom_file.endswith('.xlsx') else pd.read_csv(input_bom_file)
-    if 'bom_no' not in df_bom.columns:
-        print("❌ ไฟล์ที่อัปโหลดไม่มีคอลัมน์ bom_no")
-        return
-
-    # รวมข้อมูล (merge) เพื่อดึง Last_type
-    merge_cols = ['bom_no']
-    if 'package_code' in df_bom.columns and 'product_no' in df_bom.columns:
-        merge_cols += ['package_code', 'product_no']
-
-    df_merged = pd.merge(df_bom, df_last, on=merge_cols, how='left')
-    return df_merged
 
 def PNP_CHANGE_TYPE(input_path, output_dir):
     return run_all_years(input_path, output_dir)
