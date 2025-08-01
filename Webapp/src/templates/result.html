@@ -161,13 +161,6 @@
             {% endif %}
         {% endif %}
 
-        <div class="btn-group">
-            <a href="{{ url_for('operation') }}" class="btn btn-secondary">กลับหน้าเลือก Operation</a>
-            <a href="{{ url_for('function') }}" class="btn">ประมวลผลใหม่</a>
-            {% if session.export_file_path %}
-                <a href="{{ url_for('download_result') }}" class="btn">ดาวน์โหลดผลลัพธ์</a>
-            {% endif %}
-        </div>
     </div>
 
     <script>
