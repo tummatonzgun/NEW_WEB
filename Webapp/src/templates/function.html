@@ -142,10 +142,7 @@
         {% if date_info %}
             <div class="date-preview" style="margin-top:18px; background:#f5faff; border-radius:8px; padding:12px;">
                 <b>ช่วงวันที่ในไฟล์:</b> {{ date_info.min_date }} ถึง {{ date_info.max_date }}<br>
-                <b>จำนวนวัน:</b> {{ date_info.total_days }}<br>
                 <b>ข้อมูลวันที่ถูกต้อง:</b> {{ date_info.valid_records }} แถว<br>
-                <b>ข้อมูลวันที่ผิด:</b> {{ date_info.invalid_records }} แถว<br>
-                <b>คอลัมน์วันที่:</b> {{ date_info.date_column }}
             </div>
         {% endif %}
     </div>
