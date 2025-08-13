@@ -255,7 +255,7 @@ def preview_date_range(file_path):
         print(f"เกิดข้อผิดพลาด: {str(e)}")
         return None
 
-def map_data(average_file):
+#def map_data(average_file):
     """Map ข้อมูลเพิ่มเติมจากไฟล์ Part bom pkg ในโฟลเดอร์ data_MAP"""
     print("=== Map ข้อมูลเพิ่มเติม ===")
     
@@ -378,9 +378,9 @@ def DA_AUTO_UPH(file_path, temp_root, start_date=None, end_date=None):
             return None
 
         # Map ข้อมูลเพิ่มเติม
-        mapped_file = map_data(average_file)
-        print(f"📁 ส่งคืนไฟล์: {mapped_file}")
-        return mapped_file
+        #mapped_file = map_data(average_file)
+        print(f"📁 ส่งคืนไฟล์: {average_file}")
+        return average_file
 
     except Exception as e:
         print(f"❌ DA_AUTO_UPH error: {e}")

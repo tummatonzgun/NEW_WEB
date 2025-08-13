@@ -606,7 +606,7 @@ def run_wb_auto_uph_web(selected_uph_file, output_filename=None, start_date=None
             'error': f'เกิดข้อผิดพลาด: {str(e)}'
         }
 
-def map_data(results_file):
+#def map_data(results_file):
     """Map ข้อมูลเพิ่มเติมจากไฟล์ Part bom pkg"""
     print("=== Map ข้อมูลเพิ่มเติม WB ===")
     
@@ -818,9 +818,9 @@ def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
                                     start_date=start_date, end_date=end_date)
                     
                     # เพิ่ม mapping
-                    mapped_path = map_data(result_path)
-                    result_paths.append(mapped_path)
-            
+                    #mapped_path = map_data(result_path)
+                    result_paths.append(result_path)
+
             return result_paths[0] if len(result_paths) == 1 else result_paths
 
         # กรณีที่เป็นโฟลเดอร์
@@ -835,10 +835,10 @@ def WB_AUTO_UPH(input_path, output_dir, start_date=None, end_date=None):
                             start_date=start_date, end_date=end_date)
             
             # เพิ่ม mapping
-            mapped_path = map_data(result_path)
-            
-            print(f"WB_AUTO_UPH completed. Output: {mapped_path}")
-            return mapped_path
+            #mapped_path = map_data(result_path)
+
+            print(f"WB_AUTO_UPH completed. Output: {result_path}")
+            return result_path
         else:
             raise Exception("input_path ไม่ถูกต้อง")
 
